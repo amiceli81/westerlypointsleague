@@ -54,6 +54,43 @@ try {
         exit;
     }
 
+    if ($action === 'notify' && $method === 'POST') {
+        // Generic "send one email" endpoint -- used so far for telling a
+        // player the commissioner voided one of their picks. Doesn't touch
+        // pool_state at all: the client already has the target email from
+        // the state it loaded, so there's nothing to look up server-side.
+        $raw = file_get_contents('php://input');
+        $body = json_decode($raw, true);
+        if (!is_array($body)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'bad_request']);
+            exit;
+        }
+        $providedKey = isset($body['key']) ? (string)$body['key'] : '';
+        if (!hash_equals($SAVE_KEY, $providedKey)) {
+            http_response_code(403);
+            echo json_encode(['error' => 'forbidden']);
+            exit;
+        }
+        $email = trim((string)($body['email'] ?? ''));
+        $subject = trim((string)($body['subject'] ?? ''));
+        $message = (string)($body['message'] ?? '');
+        if ($email === '' || $subject === '' || $message === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'bad_request']);
+            exit;
+        }
+        $fromHost = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $headers = "From: no-reply@{$fromHost}\r\nContent-Type: text/plain; charset=utf-8";
+        @mail($email, $subject, $message, $headers);
+        // Always the same response regardless of whether mail() actually
+        // succeeded -- delivery failures shouldn't block the commissioner's
+        // action (the pick is still voided either way), and there's nothing
+        // useful the client could do differently on a send failure.
+        echo json_encode(['ok' => true]);
+        exit;
+    }
+
     if ($action === 'request-reset' && $method === 'POST') {
         $raw = file_get_contents('php://input');
         $body = json_decode($raw, true);

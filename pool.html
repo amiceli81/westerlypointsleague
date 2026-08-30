@@ -1850,7 +1850,7 @@
     if(!state.wagers.length){
       return '<div class="card">' + head + '<div class="empty" style="border:none">No picks have been made yet.</div></div>';
     }
-    var sub = '<p class="eyebrow" style="margin:-6px 0 12px">Removes a wager entirely — balance and win/loss records update automatically once it\'s gone. This can\'t be undone.</p>';
+    var sub = '<p class="eyebrow" style="margin:-6px 0 12px">Removes a wager entirely — balance and win/loss records update automatically once it\'s gone. This can\'t be undone. The side/pick itself isn\'t shown here, so voiding decisions never depend on what was picked.</p>';
     // Only players who currently have at least one wager are worth listing
     // in the filter -- anyone else would just filter down to an empty table.
     var playersWithWagers = [];
@@ -1876,25 +1876,19 @@
       var g = gameById(w.gameId);
       var matchup = g ? (esc(g.away) + ' @ ' + esc(g.home)) : '<em>(deleted game)</em>';
       var meta = g ? (esc(g.sport) + ' · ' + esc(g.week)) : '';
-      var homeLine = g ? (g.favorite === 'home' ? -g.spread : g.spread) : 0;
-      var awayLine = g ? (g.favorite === 'away' ? -g.spread : g.spread) : 0;
-      var pickLabel;
-      if(w.type === 'ATS'){
-        pickLabel = g ? (esc(w.pick === 'home' ? g.home : g.away) + ' ' + fmtLine(w.pick === 'home' ? homeLine : awayLine)) : esc(w.pick);
-      } else {
-        pickLabel = (w.pick === 'over' ? 'Over' : 'Under') + (g ? ' ' + fmtNum(g.total) : '');
-      }
+      // The actual side/pick is deliberately NOT shown here -- the
+      // commissioner has everything needed to identify and void the right
+      // wager (player, game, market, points) without seeing what was picked.
       var result = wagerResult(w, g);
       return '<tr><td>' + esc(displayName(w.player)) + '</td>' +
         '<td>' + matchup + '<div class="eyebrow">' + meta + '</div></td>' +
         '<td>' + esc(w.type) + '</td>' +
-        '<td>' + pickLabel + '</td>' +
         '<td class="num mono">' + w.points + '</td>' +
         '<td class="num"><span class="result-pill ' + result + '">' + result + '</span></td>' +
         '<td class="num"><button type="button" class="btn danger" data-action="void-pick" data-wager="' + w.id + '">Void</button></td>' +
         '</tr>';
     }).join('');
-    var table = '<div class="table-wrap"><table class="board"><thead><tr><th>Player</th><th>Game</th><th>Type</th><th>Pick</th><th class="num">Pts</th><th class="num">Result</th><th class="num"></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    var table = '<div class="table-wrap"><table class="board"><thead><tr><th>Player</th><th>Game</th><th>Type</th><th class="num">Pts</th><th class="num">Result</th><th class="num"></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
     return '<div class="card">' + head + sub + filter + table + '</div>';
   }
 
@@ -1910,6 +1904,24 @@
     var sub = '<p class="eyebrow" style="margin:-6px 0 12px">Downloads everyone\'s account info (usernames, names, emails, signup dates) as a JSON file -- never passwords, which are only ever stored as salted hashes. Keep this somewhere safe as a backup.</p>';
     var btn = '<div class="pick-actions"><button type="button" class="btn ghost" data-action="download-roster-backup">Download roster backup (' + state.players.length + ' account' + (state.players.length===1?'':'s') + ')</button></div>';
     return '<div class="card">' + head + sub + btn + '</div>';
+  }
+
+  function renderBootPlayerCard(){
+    // Removes a player's ACCOUNT only -- their login is revoked, but their
+    // existing picks/history stay on the board under their old team name,
+    // same as any other wager whose player key doesn't match a live account
+    // (displayName() already falls back to the raw stored name for those).
+    var head = '<div class="section-title"><h3>Boot a player</h3></div>';
+    if(!state.players.length){
+      return '<div class="card">' + head + '<div class="empty" style="border:none">No accounts have signed up yet.</div></div>';
+    }
+    var sub = '<p class="eyebrow" style="margin:-6px 0 12px">Removes a player\'s login — they\'re logged out immediately and can\'t log back in unless they sign up again. Their existing picks and stats stay on the board under their old team name. This can\'t be undone.</p>';
+    var rows = state.players.slice().sort(function(a, b){ return a.teamName.localeCompare(b.teamName); }).map(function(p){
+      return '<tr><td>' + esc(p.teamName) + '</td><td class="eyebrow">' + esc(p.username) + '</td>' +
+        '<td class="num"><button type="button" class="btn danger" data-action="boot-player" data-player="' + esc(p.username) + '">Boot</button></td></tr>';
+    }).join('');
+    var table = '<div class="table-wrap"><table class="board"><thead><tr><th>Team</th><th>Username</th><th class="num"></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    return '<div class="card">' + head + sub + table + '</div>';
   }
 
   // ---------- persistence ----------
@@ -2448,9 +2460,10 @@
     var balanceAdjust = renderBalanceAdjustCard();
     var voidPicks = renderVoidPicksCard();
     var rosterBackup = renderRosterBackupCard();
+    var bootPlayer = renderBootPlayerCard();
     var email = renderEmailCard();
 
-    return addForm + gamesList + weekVisibility + compliance + balanceAdjust + voidPicks + rosterBackup + email + settings;
+    return addForm + gamesList + weekVisibility + compliance + balanceAdjust + voidPicks + rosterBackup + bootPlayer + email + settings;
   }
 
   function playersWithEmail(){
@@ -2582,6 +2595,19 @@
       if(confirm('Void ' + displayName(wager.player) + '\'s ' + wager.type + ' pick on ' + voidLabel + ' (' + wager.points + ' pts)? This can\'t be undone.')){
         state.wagers = state.wagers.filter(function(w){ return w.id !== wagerId; });
         save('Pick voided.');
+      }
+    } else if(action === 'boot-player'){
+      if(!view.isCommissioner) return;
+      var bootUsername = el.getAttribute('data-player');
+      var bootProfile = findPlayer(bootUsername);
+      if(!bootProfile) return;
+      if(confirm('Boot ' + bootProfile.teamName + ' (' + bootProfile.username + ')? They\'ll be logged out immediately and can\'t log back in unless they sign up again. Their existing picks stay on the board under their old name. This can\'t be undone.')){
+        state.players = state.players.filter(function(p){ return p.username !== bootUsername; });
+        if(currentPlayer === bootUsername){
+          currentPlayer = null;
+          try{ localStorage.removeItem('poolUsername'); }catch(err){}
+        }
+        save('Player booted.');
       }
     } else if(action === 'delete-announcement'){
       if(!view.isCommissioner) return;

@@ -92,3 +92,9 @@ it, it just gives you a second copy running on your own domain.
   folder first — Hostinger's shared-hosting `mail()` deliverability varies;
   switching to real SMTP (e.g. PHPMailer with an SMTP account) is a
   reasonable follow-up if it's unreliable.
+- **Voiding a pick emails the player here.** The Claude Artifact can't send
+  real email at all, so voiding a pick there is silent to the affected
+  player. This deployment emails them (via the same `mail()` used for
+  password resets, through a generic `action=notify` endpoint in api.php)
+  once the void is actually confirmed saved -- never on a client-side-only
+  change that later loses a save conflict.

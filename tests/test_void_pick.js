@@ -61,6 +61,18 @@ function toLocalInputValue(d) {
     throw new Error('FAIL: expected the void row to show 250 pts and pending, got: ' + rowText);
   }
 
+  // --- The commissioner shouldn't be able to see WHAT was picked, only
+  // enough to identify and void the right wager. ---
+  const voidTableHeaders = await page.locator('.card', { has: page.locator('.section-title h3', { hasText: 'Void a pick' }) })
+    .locator('table.board thead th').allInnerTexts();
+  if (voidTableHeaders.some(h => h.trim().toLowerCase() === 'pick')) {
+    throw new Error('FAIL: expected no "Pick" column header in Void a pick, got headers: ' + JSON.stringify(voidTableHeaders));
+  }
+  console.log('PASS: no "Pick" column header in Void a pick');
+  const voidRowCellCount = await voidRow.locator('td').count();
+  if (voidRowCellCount !== 6) throw new Error('FAIL: expected 6 cells in a void-pick row (no separate pick cell), got ' + voidRowCellCount);
+  console.log('PASS: void-pick row has no separate pick cell (6 cells: player, game, type, pts, result, void button)');
+
   // --- Cancel the confirm() dialog: the wager should survive ---
   page.once('dialog', dialog => dialog.dismiss());
   await voidRow.locator('button[data-action="void-pick"]').click();

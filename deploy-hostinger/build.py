@@ -539,6 +539,40 @@ def main():
         'the verify-reset/reset-password action handlers (email match -> emailed one-time code)',
     )
 
+    # Voiding a pick now emails the affected player, on real success only --
+    # api.php's generic notify action, fired after save() actually confirms
+    # the void reached the server (never on a client-side-only change that
+    # might still lose a conflict).
+    script = replace_once(
+        script,
+        "      if(confirm('Void ' + displayName(wager.player) + '\\'s ' + wager.type + ' pick on ' + voidLabel + ' (' + wager.points + ' pts)? This can\\'t be undone.')){\n"
+        "        state.wagers = state.wagers.filter(function(w){ return w.id !== wagerId; });\n"
+        "        save('Pick voided.');\n"
+        "      }\n",
+        "      if(confirm('Void ' + displayName(wager.player) + '\\'s ' + wager.type + ' pick on ' + voidLabel + ' (' + wager.points + ' pts)? This can\\'t be undone.')){\n"
+        "        var voidedProfile = findPlayer(wager.player);\n"
+        "        var voidedGame = voidGame;\n"
+        "        var voidedType = wager.type;\n"
+        "        var voidedPoints = wager.points;\n"
+        "        state.wagers = state.wagers.filter(function(w){ return w.id !== wagerId; });\n"
+        "        save('Pick voided.').then(function(ok){\n"
+        "          if(!ok || !voidedProfile || !voidedProfile.email) return;\n"
+        "          var voidedLabelForEmail = voidedGame ? (voidedGame.away + ' @ ' + voidedGame.home + ' (' + voidedGame.sport + ' — ' + voidedGame.week + ')') : 'a game';\n"
+        "          fetch('api.php?action=notify', {\n"
+        "            method: 'POST',\n"
+        "            headers: { 'Content-Type': 'application/json' },\n"
+        "            body: JSON.stringify({\n"
+        "              email: voidedProfile.email,\n"
+        "              subject: state.poolName + ' — the commissioner reviewed your picks',\n"
+        "              message: 'The commissioner looked at your picks on ' + state.poolName + ' and voided your ' + voidedType + ' wager of ' + voidedPoints + ' pts on ' + voidedLabelForEmail + '.\\n\\nIf you have questions, reach out to the commissioner directly.',\n"
+        "              key: SAVE_KEY\n"
+        "            })\n"
+        "          }).catch(function(){});\n"
+        "        });\n"
+        "      }\n",
+        'the void-pick action handler (also email the affected player on a confirmed void)',
+    )
+
     script = replace_once(
         script,
         "  function init(){\n"
