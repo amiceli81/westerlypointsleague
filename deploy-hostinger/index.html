@@ -756,12 +756,22 @@
     if(!state.players.length){
       return '<div class="card">' + head + '<div class="empty" style="border:none">No accounts have signed up yet.</div></div>';
     }
-    var sub = '<p class="eyebrow" style="margin:-6px 0 12px">Removes a player\'s login AND every wager they\'ve ever placed — they disappear from the leaderboard, All Picks, and every other report. They\'re logged out immediately and can\'t log back in unless they sign up again. This can\'t be undone.</p>';
+    var sub = '<p class="eyebrow" style="margin:-6px 0 12px">Removes a player\'s login AND every wager they\'ve ever placed — they disappear from the leaderboard, All Picks, and every other report. They\'re logged out immediately and can\'t log back in unless they sign up again. This can\'t be undone. Paid/buy back/pay type below save independently of that -- editing them never affects login or picks.</p>';
     var rows = state.players.slice().sort(function(a, b){ return a.teamName.localeCompare(b.teamName); }).map(function(p){
+      var paidVal = p.paid ? 'yes' : 'no';
+      var buyBackVal = p.buyBack ? 'yes' : 'no';
       return '<tr><td>' + esc(p.teamName) + '</td><td class="eyebrow">' + esc(p.username) + '</td>' +
+        '<td>' +
+          '<form class="inline-payment" data-action="save-payment" data-player="' + esc(p.username) + '" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+            '<label class="eyebrow">Paid <select name="paid"><option value="no"' + (paidVal==='no'?' selected':'') + '>No</option><option value="yes"' + (paidVal==='yes'?' selected':'') + '>Yes</option></select></label>' +
+            '<label class="eyebrow">Buy back <select name="buyBack"><option value="no"' + (buyBackVal==='no'?' selected':'') + '>No</option><option value="yes"' + (buyBackVal==='yes'?' selected':'') + '>Yes</option></select></label>' +
+            '<input type="text" name="payType" placeholder="Pay type (e.g. Venmo)" value="' + esc(p.payType || '') + '" style="max-width:140px">' +
+            '<button type="submit" class="btn ghost">Save</button>' +
+          '</form>' +
+        '</td>' +
         '<td class="num"><button type="button" class="btn danger" data-action="boot-player" data-player="' + esc(p.username) + '">Boot</button></td></tr>';
     }).join('');
-    var table = '<div class="table-wrap"><table class="board"><thead><tr><th>Team</th><th>Username</th><th class="num"></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    var table = '<div class="table-wrap"><table class="board"><thead><tr><th>Team</th><th>Username</th><th>Payment</th><th class="num"></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
     return '<div class="card">' + head + sub + table + '</div>';
   }
 
@@ -1661,6 +1671,15 @@
       } else {
         toast('Wrong PIN.');
       }
+    } else if(action === 'save-payment'){
+      if(!view.isCommissioner) return;
+      var payUsername = form.getAttribute('data-player');
+      var payProfile = findPlayer(payUsername);
+      if(!payProfile) return;
+      payProfile.paid = fd.get('paid') === 'yes';
+      payProfile.buyBack = fd.get('buyBack') === 'yes';
+      payProfile.payType = String(fd.get('payType') || '').trim();
+      save('Payment info saved.');
     } else if(action === 'save-game'){
       var editId = form.getAttribute('data-editing');
       var data = {

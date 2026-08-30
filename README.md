@@ -41,7 +41,7 @@ how the app works, hand it to someone else, or rebuild it elsewhere.
   tends to get paraphrased or summarized. See its module docstring for the
   expected input shape.
 
-- **tests/** — a Playwright regression suite (20 files) covering: duplicate
+- **tests/** — a Playwright regression suite (21 files) covering: duplicate
   pick prevention, the under-wagered compliance report, the email/mailto
   composer, week-level pick locking (including a stale-page race where a
   form rendered just before lock still tries to submit), hiding upcoming
@@ -54,7 +54,8 @@ how the app works, hand it to someone else, or rebuild it elsewhere.
   that week with), voiding a pick (with the actual side/pick hidden from
   the commissioner's view, and a placed-at timestamp on every pick), the
   collapsible (default-collapsed) Void a Pick list, booting a player's
-  account (and their wagers), the void-picks player filter, the This Week
+  account (and their wagers), per-player paid/buy-back/pay-type tracking
+  (in the Boot a Player card), the void-picks player filter, the This Week
   sport filter, and rejecting a duplicate team
   name at signup.
   Each test drives a full in-memory copy of
