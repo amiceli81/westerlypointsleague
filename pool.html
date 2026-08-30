@@ -1810,6 +1810,47 @@
     return '<div class="card">' + head + sub + form + log + '</div>';
   }
 
+  function renderVoidPicksCard(){
+    // Lets the commissioner remove any single wager outright -- a wrong
+    // pick, a rule violation, a technical mix-up, whatever. Wagers aren't
+    // tallied anywhere except state.wagers itself (playerStats() recomputes
+    // balance/W-L from it every render), so deleting the entry is the whole
+    // operation -- nothing else needs reconciling afterward.
+    var head = '<div class="section-title"><h3>Void a pick</h3></div>';
+    if(!state.wagers.length){
+      return '<div class="card">' + head + '<div class="empty" style="border:none">No picks have been made yet.</div></div>';
+    }
+    var sub = '<p class="eyebrow" style="margin:-6px 0 12px">Removes a wager entirely — balance and win/loss records update automatically once it\'s gone. This can\'t be undone.</p>';
+    var rows = state.wagers.slice().sort(function(a, b){
+      var byName = displayName(a.player).localeCompare(displayName(b.player));
+      if(byName) return byName;
+      return (b.id || '').localeCompare(a.id || '');
+    }).map(function(w){
+      var g = gameById(w.gameId);
+      var matchup = g ? (esc(g.away) + ' @ ' + esc(g.home)) : '<em>(deleted game)</em>';
+      var meta = g ? (esc(g.sport) + ' · ' + esc(g.week)) : '';
+      var homeLine = g ? (g.favorite === 'home' ? -g.spread : g.spread) : 0;
+      var awayLine = g ? (g.favorite === 'away' ? -g.spread : g.spread) : 0;
+      var pickLabel;
+      if(w.type === 'ATS'){
+        pickLabel = g ? (esc(w.pick === 'home' ? g.home : g.away) + ' ' + fmtLine(w.pick === 'home' ? homeLine : awayLine)) : esc(w.pick);
+      } else {
+        pickLabel = (w.pick === 'over' ? 'Over' : 'Under') + (g ? ' ' + fmtNum(g.total) : '');
+      }
+      var result = wagerResult(w, g);
+      return '<tr><td>' + esc(displayName(w.player)) + '</td>' +
+        '<td>' + matchup + '<div class="eyebrow">' + meta + '</div></td>' +
+        '<td>' + esc(w.type) + '</td>' +
+        '<td>' + pickLabel + '</td>' +
+        '<td class="num mono">' + w.points + '</td>' +
+        '<td class="num"><span class="result-pill ' + result + '">' + result + '</span></td>' +
+        '<td class="num"><button type="button" class="btn danger" data-action="void-pick" data-wager="' + w.id + '">Void</button></td>' +
+        '</tr>';
+    }).join('');
+    var table = '<div class="table-wrap"><table class="board"><thead><tr><th>Player</th><th>Game</th><th>Type</th><th>Pick</th><th class="num">Pts</th><th class="num">Result</th><th class="num"></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    return '<div class="card">' + head + sub + table + '</div>';
+  }
+
   function renderRosterBackupCard(){
     // A safety net independent of the live artifact's own version history:
     // downloads a snapshot of every account's profile info (never raw
@@ -2343,10 +2384,11 @@
     var weekVisibility = renderWeekVisibilityCard();
     var compliance = renderComplianceCard();
     var balanceAdjust = renderBalanceAdjustCard();
+    var voidPicks = renderVoidPicksCard();
     var rosterBackup = renderRosterBackupCard();
     var email = renderEmailCard();
 
-    return addForm + gamesList + weekVisibility + compliance + balanceAdjust + rosterBackup + email + settings;
+    return addForm + gamesList + weekVisibility + compliance + balanceAdjust + voidPicks + rosterBackup + email + settings;
   }
 
   function playersWithEmail(){
@@ -2462,6 +2504,17 @@
     } else if(action === 'reopen-game'){
       var g2 = gameById(el.getAttribute('data-game'));
       if(g2){ g2.status = 'open'; g2.finalHome = null; g2.finalAway = null; save('Game reopened.'); }
+    } else if(action === 'void-pick'){
+      if(!view.isCommissioner) return;
+      var wagerId = el.getAttribute('data-wager');
+      var wager = state.wagers.filter(function(w){ return w.id === wagerId; })[0];
+      if(!wager) return;
+      var voidGame = gameById(wager.gameId);
+      var voidLabel = voidGame ? (voidGame.away + ' @ ' + voidGame.home) : 'this game';
+      if(confirm('Void ' + displayName(wager.player) + '\'s ' + wager.type + ' pick on ' + voidLabel + ' (' + wager.points + ' pts)? This can\'t be undone.')){
+        state.wagers = state.wagers.filter(function(w){ return w.id !== wagerId; });
+        save('Pick voided.');
+      }
     } else if(action === 'delete-announcement'){
       if(!view.isCommissioner) return;
       var aid = el.getAttribute('data-id');
