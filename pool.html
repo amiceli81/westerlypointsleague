@@ -1937,10 +1937,15 @@
         '</form>';
       return '<div class="card">' + head + sub + form + '</div>';
     }
-    if(!state.rulesText || !state.rulesText.trim()){
-      return '<div class="card">' + head + '<div class="empty" style="border:none">The commissioner hasn\'t posted any rules yet.</div></div>';
-    }
-    return '<div class="card">' + head + '<div class="rules-text">' + esc(state.rulesText) + '</div></div>';
+    var body = (!state.rulesText || !state.rulesText.trim())
+      ? '<div class="empty" style="border:none">The commissioner hasn\'t posted any rules yet.</div>'
+      : '<div class="rules-text">' + esc(state.rulesText) + '</div>';
+    // Editing requires the commissioner PIN right here, rather than only
+    // through the separate Commissioner tab -- so a shared/public device
+    // that's never been unlocked still can't have its rules changed by
+    // whoever happens to be looking at this tab.
+    var gate = '<div class="pin-gate" style="padding:20px 16px 4px"><p class="eyebrow" style="max-width:340px">Enter the commissioner PIN to edit these rules.</p><form data-action="admin-login"><input class="mono" name="pin" placeholder="PIN" required><div style="margin-top:12px"><button class="btn" type="submit">Unlock to edit</button></div></form></div>';
+    return '<div class="card">' + head + body + gate + '</div>';
   }
 
   function sortedGames(){
