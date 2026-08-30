@@ -1,0 +1,27 @@
+<?php
+// Copy this file to config.php (same folder, alongside api.php) and fill in
+// your real database credentials. config.php should NEVER be committed to
+// a public git repo -- add it to .gitignore.
+//
+// Find DB_HOST / DB_NAME / DB_USER / DB_PASS in Hostinger's hPanel under
+// Databases -> MySQL Databases. Hostinger almost always uses "localhost"
+// for DB_HOST when the site and database are on the same hosting account.
+
+$DB_HOST = 'localhost';
+$DB_NAME = 'REPLACE_WITH_YOUR_DATABASE_NAME';
+$DB_USER = 'REPLACE_WITH_YOUR_DATABASE_USER';
+$DB_PASS = 'REPLACE_WITH_YOUR_DATABASE_PASSWORD';
+
+// Authorizes writes to api.php (signups, picks, admin actions). This must
+// match the SAVE_KEY constant near the top of index.html's <script> block
+// exactly, or every save will be rejected as forbidden.
+//
+// This value is NOT a secret from your players -- it's embedded in
+// index.html's page source, visible to anyone who views the page. Its only
+// job is to block automated requests that never load the page at all from
+// hitting the save endpoint directly. The value below already matches the
+// one shipped in index.html, so you can leave both as-is; if you'd rather
+// generate a fresh one, run this on the server (or any machine with PHP)
+// and paste the result here AND into index.html's SAVE_KEY:
+//   php -r "echo bin2hex(random_bytes(24)), PHP_EOL;"
+$SAVE_KEY = '768ce1746f1c1681822b2e2e692649c19534fd8732b665a2';

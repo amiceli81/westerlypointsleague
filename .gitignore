@@ -1,0 +1,2 @@
+# Real database credentials for the Hostinger deployment -- never commit this.
+deploy-hostinger/config.php

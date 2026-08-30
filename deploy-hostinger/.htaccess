@@ -1,0 +1,10 @@
+DirectoryIndex index.html
+
+# Defense in depth: block direct access to files that should never be served
+# as-is, even if something is misconfigured and PHP execution fails.
+<FilesMatch "\.(sql|example)$">
+  Require all denied
+</FilesMatch>
+<Files "config.php">
+  Require all denied
+</Files>
