@@ -41,7 +41,7 @@ how the app works, hand it to someone else, or rebuild it elsewhere.
   tends to get paraphrased or summarized. See its module docstring for the
   expected input shape.
 
-- **tests/** — a Playwright regression suite (14 files) covering: duplicate
+- **tests/** — a Playwright regression suite (15 files) covering: duplicate
   pick prevention, the under-wagered compliance report, the email/mailto
   composer, week-level pick locking (including a stale-page race where a
   form rendered just before lock still tries to submit), hiding upcoming
@@ -49,12 +49,12 @@ how the app works, hand it to someone else, or rebuild it elsewhere.
   game locks, the collapsible admin games list, commissioner balance
   adjustments, hiding locked games from the This Week tab by default, the
   Rules tab (including its PIN gate), self-service password reset, the
-  minimum-wager enforcement, and voiding a pick. Each test drives a full
-  in-memory copy of the app in a headless browser — none of them touch the
-  live artifact. `tests/build_test_full.py` wraps `pool.html` in a minimal
-  `<html>` shell so it can be opened directly by a browser for testing; run
-  it once before running the tests, and again after any change to
-  `pool.html`.
+  minimum-wager enforcement, voiding a pick, and the void-picks player
+  filter. Each test drives a full in-memory copy of the app in a headless
+  browser — none of them touch the live artifact. `tests/build_test_full.py`
+  wraps `pool.html` in a minimal `<html>` shell so it can be opened directly
+  by a browser for testing; run it once before running the tests, and again
+  after any change to `pool.html`.
 
   To run the full suite (needs Node + Playwright, and a Chromium binary —
   see `executablePath` near the top of each test file if yours lives
@@ -92,9 +92,10 @@ how the app works, hand it to someone else, or rebuild it elsewhere.
 - The **Rules** tab is a plain-text box anyone can read; only the
   commissioner can edit and save it.
 - The **Void a pick** tool (Commissioner tab) lets you remove any single
-  wager outright — a wrong pick, a rule violation, a mix-up, whatever.
-  Balance and win/loss records recompute automatically once it's gone; this
-  can't be undone.
+  wager outright — a wrong pick, a rule violation, a mix-up, whatever. A
+  player filter dropdown narrows the list to one team at a time. Balance
+  and win/loss records recompute automatically once it's gone; this can't
+  be undone.
 - The **Under-wagered this week** report compares each player's wagers
   against half of the balance they had at the *start* of the current week
   — a game that already went final mid-week doesn't retroactively move the

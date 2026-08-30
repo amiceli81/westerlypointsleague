@@ -1421,7 +1421,8 @@
     readOnly: false,
     capabilityChecked: false,
     authMode: 'signup',
-    resetVerifiedUsername: null
+    resetVerifiedUsername: null,
+    voidPickFilter: ''
   };
 
   // Migrate pre-account rosters (plain name strings) out of state.players --
@@ -1821,7 +1822,24 @@
       return '<div class="card">' + head + '<div class="empty" style="border:none">No picks have been made yet.</div></div>';
     }
     var sub = '<p class="eyebrow" style="margin:-6px 0 12px">Removes a wager entirely — balance and win/loss records update automatically once it\'s gone. This can\'t be undone.</p>';
-    var rows = state.wagers.slice().sort(function(a, b){
+    // Only players who currently have at least one wager are worth listing
+    // in the filter -- anyone else would just filter down to an empty table.
+    var playersWithWagers = [];
+    var seenPlayers = {};
+    state.wagers.forEach(function(w){
+      if(!seenPlayers[w.player]){ seenPlayers[w.player] = true; playersWithWagers.push(w.player); }
+    });
+    playersWithWagers.sort(function(a, b){ return displayName(a).localeCompare(displayName(b)); });
+    var activeFilter = seenPlayers[view.voidPickFilter] ? view.voidPickFilter : '';
+    var filterOptions = playersWithWagers.map(function(p){
+      return '<option value="' + esc(p) + '" ' + (activeFilter === p ? 'selected' : '') + '>' + esc(displayName(p)) + '</option>';
+    }).join('');
+    var filter = '<div class="field" style="max-width:280px;margin-bottom:12px"><label>Filter by player</label><select data-action="filter-void-player"><option value="">All players</option>' + filterOptions + '</select></div>';
+    var visibleWagers = activeFilter ? state.wagers.filter(function(w){ return w.player === activeFilter; }) : state.wagers;
+    if(!visibleWagers.length){
+      return '<div class="card">' + head + sub + filter + '<div class="empty" style="border:none">No picks for this player.</div></div>';
+    }
+    var rows = visibleWagers.slice().sort(function(a, b){
       var byName = displayName(a.player).localeCompare(displayName(b.player));
       if(byName) return byName;
       return (b.id || '').localeCompare(a.id || '');
@@ -1848,7 +1866,7 @@
         '</tr>';
     }).join('');
     var table = '<div class="table-wrap"><table class="board"><thead><tr><th>Player</th><th>Game</th><th>Type</th><th>Pick</th><th class="num">Pts</th><th class="num">Result</th><th class="num"></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
-    return '<div class="card">' + head + sub + table + '</div>';
+    return '<div class="card">' + head + sub + filter + table + '</div>';
   }
 
   function renderRosterBackupCard(){
@@ -2198,7 +2216,6 @@
         openBlocks += '<div class="pick-block"><span class="label">ATS</span>' +
           '<label class="opt"><input type="radio" name="ats-pick" value="away"> ' + esc(g.away) + ' ' + fmtLine(awayLine) + '</label>' +
           '<label class="opt"><input type="radio" name="ats-pick" value="home"> ' + esc(g.home) + ' ' + fmtLine(homeLine) + '</label>' +
-          '<label class="opt"><input type="radio" name="ats-pick" value="" checked> No pick</label>' +
           '<input class="pts-input" type="number" min="' + MIN_WAGER + '" step="1" name="ats-points" placeholder="pts">' +
           '</div>';
       }
@@ -2206,7 +2223,6 @@
         openBlocks += '<div class="pick-block"><span class="label">O/U</span>' +
           '<label class="opt"><input type="radio" name="ou-pick" value="over"> Over ' + fmtNum(g.total) + '</label>' +
           '<label class="opt"><input type="radio" name="ou-pick" value="under"> Under ' + fmtNum(g.total) + '</label>' +
-          '<label class="opt"><input type="radio" name="ou-pick" value="" checked> No pick</label>' +
           '<input class="pts-input" type="number" min="' + MIN_WAGER + '" step="1" name="ou-points" placeholder="pts">' +
           '</div>';
       }
@@ -2520,6 +2536,16 @@
       var aid = el.getAttribute('data-id');
       state.announcements = state.announcements.filter(function(a){ return a.id !== aid; });
       save('Announcement removed.');
+    }
+  });
+
+  document.addEventListener('change', function(e){
+    var el = e.target.closest('[data-action]');
+    if(!el) return;
+    var action = el.getAttribute('data-action');
+    if(action === 'filter-void-player'){
+      view.voidPickFilter = el.value;
+      render();
     }
   });
 
