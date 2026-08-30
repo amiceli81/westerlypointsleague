@@ -46,13 +46,6 @@ function toLocalInputValue(d) {
   await form.locator('button[type="submit"]').click();
   await page.waitForTimeout(200);
 
-  // Confirm the balance reflects the (still-pending) wager on the leaderboard.
-  await page.click('button[data-action="set-tab"][data-tab="leaderboard"]');
-  await page.waitForTimeout(150);
-  let leaderRow = await page.locator('table.board tbody tr', { hasText: 'Void Test Team' }).innerText();
-  console.log('Leaderboard row before void:', leaderRow.replace(/\n/g, ' | '));
-  if (!leaderRow.includes('250')) throw new Error('FAIL: expected the pending 250-pt wager to show on the leaderboard, got: ' + leaderRow);
-
   // --- Go to the admin tab and find the Void a pick card ---
   await page.click('button[data-action="set-tab"][data-tab="admin"]');
   await page.waitForTimeout(150);
@@ -90,9 +83,9 @@ function toLocalInputValue(d) {
   // --- Balance should now be back to the starting balance (wager is gone) ---
   await page.click('button[data-action="set-tab"][data-tab="leaderboard"]');
   await page.waitForTimeout(150);
-  leaderRow = await page.locator('table.board tbody tr', { hasText: 'Void Test Team' }).innerText();
+  const leaderRow = await page.locator('table.board tbody tr', { hasText: 'Void Test Team' }).innerText();
   console.log('Leaderboard row after void:', leaderRow.replace(/\n/g, ' | '));
-  if (leaderRow.includes('250')) throw new Error('FAIL: the voided wager should no longer show as pending, got: ' + leaderRow);
+  if (leaderRow.includes('250')) throw new Error('FAIL: the voided wager should not affect the balance, got: ' + leaderRow);
   if (!/\b1000\b/.test(leaderRow)) throw new Error('FAIL: expected the balance to be back at the starting 1000, got: ' + leaderRow);
 
   // --- Defense-in-depth: a forged void-pick dispatch from a page that was

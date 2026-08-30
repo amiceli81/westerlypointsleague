@@ -2265,9 +2265,9 @@
     var body = rows.map(function(r, i){
       var d = r.stats.balance - state.startingBalance;
       var nameCell = '<button type="button" class="player-link" data-action="view-player" data-player="' + esc(r.key) + '">' + esc(displayName(r.key)) + '</button>' + (r.key===currentPlayer?' <span class="eyebrow">(you)</span>':'');
-      return '<tr><td class="rank ' + (i===0?'top':'') + '">' + (i+1) + '</td><td>' + nameCell + '</td><td class="num mono">' + r.stats.wins + '-' + r.stats.losses + '-' + r.stats.pushes + '</td><td class="num mono" style="color:' + (d>0?'var(--win)':d<0?'var(--loss)':'var(--text)') + '">' + r.stats.balance + '</td><td class="num mono" style="color:var(--text-dim)">' + (r.stats.pending? r.stats.pending : '—') + '</td></tr>';
+      return '<tr><td class="rank ' + (i===0?'top':'') + '">' + (i+1) + '</td><td>' + nameCell + '</td><td class="num mono">' + r.stats.wins + '-' + r.stats.losses + '-' + r.stats.pushes + '</td><td class="num mono" style="color:' + (d>0?'var(--win)':d<0?'var(--loss)':'var(--text)') + '">' + r.stats.balance + '</td></tr>';
     }).join('');
-    var html = '<div class="card"><div class="table-wrap"><table class="board"><thead><tr><th>#</th><th>Player</th><th class="num">W-L-P</th><th class="num">Balance</th><th class="num">Pending</th></tr></thead><tbody>' + body + '</tbody></table></div></div>' +
+    var html = '<div class="card"><div class="table-wrap"><table class="board"><thead><tr><th>#</th><th>Player</th><th class="num">W-L-P</th><th class="num">Balance</th></tr></thead><tbody>' + body + '</tbody></table></div></div>' +
       '<div class="eyebrow" style="text-align:center">Everyone starts at ' + state.startingBalance + ' pts</div>' +
       '<p class="eyebrow" style="text-align:center">Click a player\'s name to see picks on games that have kicked off</p>';
     if(view.viewingPlayer && keys.indexOf(view.viewingPlayer) !== -1){
