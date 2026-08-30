@@ -2335,7 +2335,9 @@
         var otherCount = ws.length - ownWs.length;
         var body = '';
         if(ownWs.length) body += table(rowsFor(ownWs, g));
-        if(otherCount > 0) body += '<div class="empty" style="border:none">' + otherCount + ' other pick' + (otherCount===1?'':'s') + ' made on this game — hidden until kickoff.</div>';
+        // Deliberately doesn't say how many -- even the count could nudge a
+        // player's own pick (e.g. "barely anyone's wagered, I'll wait").
+        if(otherCount > 0) body += '<div class="empty" style="border:none">Other picks made on this game — hidden until kickoff.</div>';
         html += '<div class="card">' + title + body + '</div>';
         return;
       }
