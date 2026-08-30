@@ -124,7 +124,8 @@
   .opt{ display:flex; align-items:center; gap:5px; border:1px solid var(--line); border-radius:6px; padding:6px 10px; cursor:pointer; font-size:.85rem; }
   .opt input{ margin:0; accent-color:var(--accent); }
   .opt.checked{ border-color:var(--accent); background:var(--surface-2); }
-  .pts-input{ width:76px; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--text); font-family:Arial,Helvetica,sans-serif; }
+  .pts-input{ width:76px; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--text); font-family:Arial,Helvetica,sans-serif; -moz-appearance:textfield; }
+  .pts-input::-webkit-outer-spin-button, .pts-input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
   .pick-actions{ display:flex; justify-content:flex-end; gap:8px; }
 
   .recap{ padding:12px 16px 16px; display:flex; flex-direction:column; gap:6px; font-size:.86rem; }
@@ -1395,6 +1396,7 @@
   var TITLE_TEXT = document.title;
   var STYLE_TEXT = document.getElementById('app-style').textContent;
   var SCRIPT_TEXT = document.currentScript.textContent;
+  var MIN_WAGER = 100;
 
   var state = null;
   try{ state = JSON.parse(document.getElementById('state-data').textContent); }catch(e){ state = null; }
@@ -2156,7 +2158,7 @@
           '<label class="opt"><input type="radio" name="ats-pick" value="away"> ' + esc(g.away) + ' ' + fmtLine(awayLine) + '</label>' +
           '<label class="opt"><input type="radio" name="ats-pick" value="home"> ' + esc(g.home) + ' ' + fmtLine(homeLine) + '</label>' +
           '<label class="opt"><input type="radio" name="ats-pick" value="" checked> No pick</label>' +
-          '<input class="pts-input" type="number" min="1" step="1" name="ats-points" placeholder="pts">' +
+          '<input class="pts-input" type="number" min="' + MIN_WAGER + '" step="1" name="ats-points" placeholder="pts">' +
           '</div>';
       }
       if(!ouW){
@@ -2164,10 +2166,12 @@
           '<label class="opt"><input type="radio" name="ou-pick" value="over"> Over ' + fmtNum(g.total) + '</label>' +
           '<label class="opt"><input type="radio" name="ou-pick" value="under"> Under ' + fmtNum(g.total) + '</label>' +
           '<label class="opt"><input type="radio" name="ou-pick" value="" checked> No pick</label>' +
-          '<input class="pts-input" type="number" min="1" step="1" name="ou-points" placeholder="pts">' +
+          '<input class="pts-input" type="number" min="' + MIN_WAGER + '" step="1" name="ou-points" placeholder="pts">' +
           '</div>';
       }
-      var formBlock = openBlocks ? '<form class="pick-form" data-action="save-picks" data-game="' + g.id + '">' + openBlocks + '<p class="eyebrow" style="margin:6px 0 0">Picks lock in once submitted and can\'t be changed.</p><div class="pick-actions"><button class="btn" type="submit">Save picks</button></div></form>' : '';
+      // novalidate so the browser's own constraint bubble never pre-empts
+      // our own "You must wager at least MIN_WAGER points." popup below.
+      var formBlock = openBlocks ? '<form class="pick-form" data-action="save-picks" data-game="' + g.id + '" novalidate>' + openBlocks + '<p class="eyebrow" style="margin:6px 0 0">Picks lock in once submitted and can\'t be changed.</p><div class="pick-actions"><button class="btn" type="submit">Save picks</button></div></form>' : '';
 
       body = lockedBlock + formBlock;
     }
@@ -2546,12 +2550,23 @@
       // since kicked off) can still post here -- tell them why it didn't
       // save instead of silently doing nothing.
       if(isWeekLockedForPlayer(g, currentPlayer)){ toast('Your first game has kicked off already.'); return; }
+      // Any market with a pick actually selected must wager at least
+      // MIN_WAGER points -- check both markets before saving either, so a
+      // too-small wager on one doesn't silently let the other through.
+      var atsPickVal = fd.get('ats-pick');
+      var ouPickVal = fd.get('ou-pick');
+      var atsPointsVal = parseInt(fd.get('ats-points'), 10);
+      var ouPointsVal = parseInt(fd.get('ou-points'), 10);
+      if((atsPickVal && atsPointsVal < MIN_WAGER) || (ouPickVal && ouPointsVal < MIN_WAGER)){
+        toast('You must wager at least ' + MIN_WAGER + ' points.');
+        return;
+      }
       // Once a market has a submitted wager, it's final -- never overwrite an
       // existing pick, even if a stale form somehow still posts one (the UI
       // itself stops rendering an editable field for an already-submitted
       // market, but this guard is what actually enforces the rule).
-      if(!playerWager(gameId, currentPlayer, 'ATS')) applyPick(gameId, 'ATS', fd.get('ats-pick'), fd.get('ats-points'));
-      if(!playerWager(gameId, currentPlayer, 'OU')) applyPick(gameId, 'OU', fd.get('ou-pick'), fd.get('ou-points'));
+      if(!playerWager(gameId, currentPlayer, 'ATS')) applyPick(gameId, 'ATS', atsPickVal, fd.get('ats-points'));
+      if(!playerWager(gameId, currentPlayer, 'OU')) applyPick(gameId, 'OU', ouPickVal, fd.get('ou-points'));
       save('Picks saved.');
     } else if(action === 'admin-login'){
       var pin = String(fd.get('pin') || '').trim();

@@ -41,19 +41,19 @@ how the app works, hand it to someone else, or rebuild it elsewhere.
   tends to get paraphrased or summarized. See its module docstring for the
   expected input shape.
 
-- **tests/** — a Playwright regression suite (11 files) covering: duplicate
+- **tests/** — a Playwright regression suite (13 files) covering: duplicate
   pick prevention, the under-wagered compliance report, the email/mailto
   composer, week-level pick locking (including a stale-page race where a
   form rendered just before lock still tries to submit), hiding upcoming
   weeks until their dates arrive, viewing another player's picks once a
   game locks, the collapsible admin games list, commissioner balance
   adjustments, hiding locked games from the This Week tab by default, the
-  Rules tab (including its PIN gate), and self-service password reset. Each
-  test drives a full in-memory copy of the app in a headless browser — none
-  of them touch the live artifact. `tests/build_test_full.py` wraps
-  `pool.html` in a minimal `<html>` shell so it can be opened directly by a
-  browser for testing; run it once before running the tests, and again
-  after any change to `pool.html`.
+  Rules tab (including its PIN gate), self-service password reset, and the
+  minimum-wager enforcement. Each test drives a full in-memory copy of the
+  app in a headless browser — none of them touch the live artifact.
+  `tests/build_test_full.py` wraps `pool.html` in a minimal `<html>` shell
+  so it can be opened directly by a browser for testing; run it once before
+  running the tests, and again after any change to `pool.html`.
 
   To run the full suite (needs Node + Playwright, and a Chromium binary —
   see `executablePath` near the top of each test file if yours lives
@@ -80,6 +80,8 @@ how the app works, hand it to someone else, or rebuild it elsewhere.
 - Everyone starts at 1000 points; a win adds the wagered points, a loss
   subtracts them, a push is a wash. Balances and win/loss records aggregate
   across every week automatically — there's no per-week reset.
+- Every wager needs at least 100 points — a player who tries to submit less
+  gets a popup ("You must wager at least 100 points.") and nothing saves.
 - Share the artifact with **edit access** (share menu on the page) for
   anyone who should be able to sign up and submit their own picks —
   read-only viewers can watch the board but not wager.

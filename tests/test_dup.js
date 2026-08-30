@@ -63,15 +63,15 @@ function toLocalInputValue(d) {
   // --- Submit ATS: home, 50 pts ---
   let form = card.locator('form[data-action="save-picks"]');
   await form.locator('input[name="ats-pick"][value="home"]').check();
-  await form.locator('input[name="ats-points"]').fill('50');
+  await form.locator('input[name="ats-points"]').fill('150');
   await form.locator('button[type="submit"]').click();
   await page.waitForTimeout(150);
   await reload();
 
   let cardText = await card.innerText();
-  console.log('After submitting ATS home/50:', cardText.replace(/\n/g, ' | '));
-  if (!cardText.includes('Home Team') || !cardText.includes('50')) {
-    throw new Error('FAIL: expected ATS recap to show Home Team / 50, got: ' + cardText);
+  console.log('After submitting ATS home/150:', cardText.replace(/\n/g, ' | '));
+  if (!cardText.includes('Home Team') || !cardText.includes('150')) {
+    throw new Error('FAIL: expected ATS recap to show Home Team / 150, got: ' + cardText);
   }
   if (!cardText.toLowerCase().includes("can't be changed") && !cardText.toLowerCase().includes('locked in')) {
     throw new Error('FAIL: expected a "locked in" notice after submitting ATS, got: ' + cardText);
@@ -102,7 +102,7 @@ function toLocalInputValue(d) {
   await reload();
   cardText = await card.innerText();
   console.log('After forged ATS-change attempt:', cardText.replace(/\n/g, ' | '));
-  if (!cardText.includes('Home Team') || !cardText.includes('50')) {
+  if (!cardText.includes('Home Team') || !cardText.includes('150')) {
     throw new Error('FAIL: forged resubmission changed the already-locked ATS pick: ' + cardText);
   }
   if (cardText.includes('999')) throw new Error('FAIL: forged resubmission was applied (999 pts leaked through): ' + cardText);
@@ -110,15 +110,15 @@ function toLocalInputValue(d) {
   // --- Now submit OU: over, 15 pts (still allowed -- untouched market) ---
   form = card.locator('form[data-action="save-picks"]');
   await form.locator('input[name="ou-pick"][value="over"]').check();
-  await form.locator('input[name="ou-points"]').fill('15');
+  await form.locator('input[name="ou-points"]').fill('115');
   await form.locator('button[type="submit"]').click();
   await page.waitForTimeout(150);
   await reload();
 
   cardText = await card.innerText();
-  console.log('After submitting OU over/15:', cardText.replace(/\n/g, ' | '));
-  if (!cardText.includes('Over') || !cardText.includes('15')) {
-    throw new Error('FAIL: expected OU recap to show Over / 15, got: ' + cardText);
+  console.log('After submitting OU over/115:', cardText.replace(/\n/g, ' | '));
+  if (!cardText.includes('Over') || !cardText.includes('115')) {
+    throw new Error('FAIL: expected OU recap to show Over / 115, got: ' + cardText);
   }
   // Both markets are now submitted -- the entire form should be gone.
   const anyRadios = await card.locator('input[type="radio"]').count();
@@ -139,7 +139,7 @@ function toLocalInputValue(d) {
   await reload();
   cardText = await card.innerText();
   console.log('After forged OU-change attempt:', cardText.replace(/\n/g, ' | '));
-  if (!cardText.includes('Over') || !cardText.includes('15')) {
+  if (!cardText.includes('Over') || !cardText.includes('115')) {
     throw new Error('FAIL: forged resubmission changed the already-locked OU pick: ' + cardText);
   }
   if (cardText.includes('500') || cardText.includes('Under')) {
@@ -173,7 +173,7 @@ function toLocalInputValue(d) {
   await page.waitForTimeout(250);
   form = card.locator('form[data-action="save-picks"]');
   await form.locator('input[name="ats-pick"][value="away"]').check();
-  await form.locator('input[name="ats-points"]').fill('20');
+  await form.locator('input[name="ats-points"]').fill('120');
   await form.locator('button[type="submit"]').click();
   await page.waitForTimeout(150);
 
@@ -183,7 +183,7 @@ function toLocalInputValue(d) {
   let ourCardText = await picksCardText();
   console.log('All Picks (as duptester2) BEFORE kickoff:', ourCardText);
   if (!ourCardText) throw new Error('FAIL: expected a card for this game, found none');
-  if (!ourCardText.includes('Testers Squad B') || !ourCardText.includes('20')) {
+  if (!ourCardText.includes('Testers Squad B') || !ourCardText.includes('120')) {
     throw new Error('FAIL: expected duptester2 to see their OWN pick before kickoff, got: ' + ourCardText);
   }
   if (!ourCardText.toLowerCase().includes('other pick') || !ourCardText.toLowerCase().includes('hidden until kickoff')) {
@@ -245,9 +245,9 @@ function toLocalInputValue(d) {
   const atsRow = rowsAfter.find(r => r[0] === 'Dup Testers' && r[1] === 'ATS');
   const ouRow = rowsAfter.find(r => r[0] === 'Dup Testers' && r[1] === 'OU');
   const secondAtsRow = rowsAfter.find(r => r[0] === 'Testers Squad B');
-  if (!atsRow || !atsRow[2].includes('Home Team') || atsRow[3] !== '50') throw new Error('FAIL: revealed ATS row wrong: ' + JSON.stringify(atsRow));
-  if (!ouRow || !ouRow[2].includes('Over') || ouRow[3] !== '15') throw new Error('FAIL: revealed OU row wrong: ' + JSON.stringify(ouRow));
-  if (!secondAtsRow || !secondAtsRow[2].includes('Away Team') || secondAtsRow[3] !== '20') throw new Error('FAIL: revealed second player\'s ATS row wrong: ' + JSON.stringify(secondAtsRow));
+  if (!atsRow || !atsRow[2].includes('Home Team') || atsRow[3] !== '150') throw new Error('FAIL: revealed ATS row wrong: ' + JSON.stringify(atsRow));
+  if (!ouRow || !ouRow[2].includes('Over') || ouRow[3] !== '115') throw new Error('FAIL: revealed OU row wrong: ' + JSON.stringify(ouRow));
+  if (!secondAtsRow || !secondAtsRow[2].includes('Away Team') || secondAtsRow[3] !== '120') throw new Error('FAIL: revealed second player\'s ATS row wrong: ' + JSON.stringify(secondAtsRow));
 
   console.log('ALL TESTS PASSED');
   await browser.close();

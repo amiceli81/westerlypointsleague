@@ -96,14 +96,14 @@ function toLocalInputValue(d) {
   // Wager on the EARLY game.
   let form = earlyCard().locator('form[data-action="save-picks"]');
   await form.locator('input[name="ats-pick"][value="home"]').check();
-  await form.locator('input[name="ats-points"]').fill('40');
+  await form.locator('input[name="ats-points"]').fill('140');
   await form.locator('button[type="submit"]').click();
   await page.waitForTimeout(150);
 
   // Wager on the LATE game too (still open, before the early game has started).
   form = lateCard().locator('form[data-action="save-picks"]');
   await form.locator('input[name="ats-pick"][value="away"]').check();
-  await form.locator('input[name="ats-points"]').fill('30');
+  await form.locator('input[name="ats-points"]').fill('130');
   await form.locator('button[type="submit"]').click();
   await page.waitForTimeout(150);
 
@@ -133,7 +133,7 @@ function toLocalInputValue(d) {
   if (!lateRecapText || !lateRecapText.toLowerCase().includes('locked')) {
     throw new Error('FAIL: late game recap should explain the week is locked, got: ' + lateRecapText);
   }
-  if (!lateRecapText.includes('Away Late') && !lateRecapText.includes('40') && !lateRecapText.includes('30')) {
+  if (!lateRecapText.includes('Away Late') && !lateRecapText.includes('140') && !lateRecapText.includes('130')) {
     // just sanity that some ATS content shows the existing pick was preserved
   }
 
@@ -199,7 +199,7 @@ function toLocalInputValue(d) {
   // raceuser's earliest wagered game of the week.
   let raceForm = raceEarlyCard().locator('form[data-action="save-picks"]');
   await raceForm.locator('input[name="ats-pick"][value="home"]').check();
-  await raceForm.locator('input[name="ats-points"]').fill('20');
+  await raceForm.locator('input[name="ats-points"]').fill('120');
   await raceForm.locator('button[type="submit"]').click();
   await page2.waitForTimeout(150);
 
@@ -207,7 +207,7 @@ function toLocalInputValue(d) {
   // form we'll try to (stale-)submit after RaceEarly's kickoff passes.
   raceForm = raceLateCard().locator('form[data-action="save-picks"]');
   await raceForm.locator('input[name="ats-pick"][value="away"]').check();
-  await raceForm.locator('input[name="ats-points"]').fill('15');
+  await raceForm.locator('input[name="ats-points"]').fill('115');
   await raceForm.locator('button[type="submit"]').click();
   await page2.waitForTimeout(150);
 
@@ -219,7 +219,7 @@ function toLocalInputValue(d) {
   const staleOuForm = raceLateCard().locator('form[data-action="save-picks"]');
   if (await staleOuForm.count() !== 1) throw new Error('FAIL: expected the stale RaceLate-game form to still be present in the DOM before submitting it');
   await staleOuForm.locator('input[name="ou-pick"][value="over"]').check();
-  await staleOuForm.locator('input[name="ou-points"]').fill('10');
+  await staleOuForm.locator('input[name="ou-points"]').fill('110');
   await staleOuForm.locator('button[type="submit"]').click();
   await page2.waitForTimeout(200);
 

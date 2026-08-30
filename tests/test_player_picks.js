@@ -66,13 +66,13 @@ function toLocalInputValue(d) {
 
   let form = lockedCard().locator('form[data-action="save-picks"]');
   await form.locator('input[name="ats-pick"][value="home"]').check();
-  await form.locator('input[name="ats-points"]').fill('77');
+  await form.locator('input[name="ats-points"]').fill('177');
   await form.locator('button[type="submit"]').click();
   await page.waitForTimeout(150);
 
   form = openCard().locator('form[data-action="save-picks"]');
   await form.locator('input[name="ats-pick"][value="away"]').check();
-  await form.locator('input[name="ats-points"]').fill('33');
+  await form.locator('input[name="ats-points"]').fill('133');
   await form.locator('button[type="submit"]').click();
   await page.waitForTimeout(150);
 
@@ -111,7 +111,7 @@ function toLocalInputValue(d) {
   if (cardText.includes('Open Away') || cardText.includes('Open Home')) {
     throw new Error('FAIL: the OPEN game (not started) leaked into another visitor\'s view of this player\'s picks: ' + cardText);
   }
-  if (!cardText.includes('77')) throw new Error('FAIL: expected the 77-point locked-game pick amount to show, got: ' + cardText);
+  if (!cardText.includes('177')) throw new Error('FAIL: expected the 177-point locked-game pick amount to show, got: ' + cardText);
 
   // --- Close should remove the card ---
   await page.click('button[data-action="close-player-picks"]');
