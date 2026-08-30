@@ -51,8 +51,15 @@ function toLocalInputValue(d) {
   await page.fill('form[data-action="signup"] input[name="confirmPassword"]', 'password1');
   await page.click('form[data-action="signup"] button[type="submit"]');
   await page.waitForTimeout(200);
-  // No wager placed -- this player should be flagged as under-wagered
-  // (0 wagered vs. half of their 1000 starting balance).
+
+  // One small wager (100 pts, well under the 500-pt half-balance threshold)
+  // -- flagged as under-wagered, but with a non-zero wager count to check.
+  const card = page.locator('.game-card', { hasText: teamA.split('@')[0].trim() });
+  const pickForm = card.locator('form[data-action="save-picks"]');
+  await pickForm.locator('input[name="ats-pick"]').first().check();
+  await pickForm.locator('input[name="ats-points"]').fill('100');
+  await pickForm.locator('button[type="submit"]').click();
+  await page.waitForTimeout(200);
 
   await page.click('button[data-action="set-tab"][data-tab="admin"]');
   await page.waitForTimeout(200);
@@ -72,11 +79,11 @@ function toLocalInputValue(d) {
   const lines = download.data.trim().split(/\r\n/);
   if (!lines[0].startsWith('Week,')) throw new Error('FAIL: expected a "Week,..." first line, got: ' + lines[0]);
   if (!lines[0].includes('CSV Test Week')) throw new Error('FAIL: expected the current week name in the CSV, got: ' + lines[0]);
-  if (!/^Team,Week-start balance,Half,Wagered,Short By$/.test(lines[1])) throw new Error('FAIL: unexpected CSV header row: ' + lines[1]);
+  if (!/^Team,Week-start balance,Half,Wagered,# Wagers,Short By$/.test(lines[1])) throw new Error('FAIL: unexpected CSV header row: ' + lines[1]);
   const dataRow = lines.find(l => l.includes('Compliance CSV Team'));
   if (!dataRow) throw new Error('FAIL: expected Compliance CSV Team in the CSV, got: ' + download.data);
-  if (!dataRow.includes('1000') || !dataRow.includes('500') || !dataRow.includes('0')) {
-    throw new Error('FAIL: expected balance=1000, half=500, wagered=0 in the row, got: ' + dataRow);
+  if (dataRow !== 'Compliance CSV Team,1000,500,100,1,400') {
+    throw new Error('FAIL: expected balance=1000, half=500, wagered=100, wagerCount=1, shortBy=400 in the row, got: ' + dataRow);
   }
   console.log('PASS: compliance CSV export contains the current week and under-wagered rows');
 

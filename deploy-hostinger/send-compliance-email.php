@@ -196,8 +196,12 @@ function main(): void {
         $balance = $startingBalance + $net + $adj;
 
         $wagered = 0;
+        $wagerCount = 0;
         foreach ($wagers as $w) {
-            if ($w['player'] === $name && isset($gameIds[$w['gameId']])) $wagered += $w['points'];
+            if ($w['player'] === $name && isset($gameIds[$w['gameId']])) {
+                $wagered += $w['points'];
+                $wagerCount++;
+            }
         }
         $required = $balance / 2;
         if ($wagered < $required) {
@@ -206,6 +210,7 @@ function main(): void {
                 'balance' => $balance,
                 'required' => $required,
                 'wagered' => $wagered,
+                'wagerCount' => $wagerCount,
                 'shortBy' => max(0, $required - $wagered),
             ];
         }
@@ -214,10 +219,10 @@ function main(): void {
 
     $lines = [];
     $lines[] = 'Week,' . csvField($label);
-    $lines[] = implode(',', array_map('csvField', ['Team', 'Week-start balance', 'Half', 'Wagered', 'Short By']));
+    $lines[] = implode(',', array_map('csvField', ['Team', 'Week-start balance', 'Half', 'Wagered', '# Wagers', 'Short By']));
     foreach ($rows as $r) {
         $lines[] = implode(',', array_map('csvField', [
-            $r['team'], $r['balance'], round($r['required'], 1), $r['wagered'], round($r['shortBy'], 1),
+            $r['team'], $r['balance'], round($r['required'], 1), $r['wagered'], $r['wagerCount'], round($r['shortBy'], 1),
         ]));
     }
     $csv = implode("\r\n", $lines) . "\r\n";

@@ -1828,8 +1828,8 @@
     }
     return rosterUsernames().map(function(name){
       var balance = startOfWeekBalance(name, weekStart, gameIds);
-      var wagered = state.wagers.filter(function(w){ return w.player === name && gameIds[w.gameId]; })
-        .reduce(function(sum, w){ return sum + w.points; }, 0);
+      var weekWagers = state.wagers.filter(function(w){ return w.player === name && gameIds[w.gameId]; });
+      var wagered = weekWagers.reduce(function(sum, w){ return sum + w.points; }, 0);
       var required = balance / 2;
       return {
         player: name,
@@ -1837,6 +1837,7 @@
         balance: balance,
         required: required,
         wagered: wagered,
+        wagerCount: weekWagers.length,
         shortBy: Math.max(0, required - wagered)
       };
     }).filter(function(r){ return r.wagered < r.required; })
@@ -1907,11 +1908,11 @@
       return view.complianceSortAsc ? (a.shortBy - b.shortBy) : (b.shortBy - a.shortBy);
     });
     var body = rows.map(function(r){
-      return '<tr><td>' + esc(r.team) + '</td><td class="num mono">' + r.balance + '</td><td class="num mono">' + fmtHalf(r.required) + '</td><td class="num mono">' + r.wagered + '</td><td class="num"><span class="result-pill loss">short ' + fmtHalf(r.shortBy) + '</span></td></tr>';
+      return '<tr><td>' + esc(r.team) + '</td><td class="num mono">' + r.balance + '</td><td class="num mono">' + fmtHalf(r.required) + '</td><td class="num mono">' + r.wagered + '</td><td class="num mono">' + r.wagerCount + '</td><td class="num"><span class="result-pill loss">short ' + fmtHalf(r.shortBy) + '</span></td></tr>';
     }).join('');
     var sortArrow = view.complianceSortAsc ? '▲' : '▼';
     var statusHeader = '<th class="num"><button type="button" class="sortable-th" data-action="toggle-compliance-sort">Status ' + sortArrow + '</button></th>';
-    return '<div class="card">' + head + freezeNote + sub + '<div class="table-wrap"><table class="board"><thead><tr><th>Team</th><th class="num">Week-start balance</th><th class="num">Half</th><th class="num">Wagered</th>' + statusHeader + '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
+    return '<div class="card">' + head + freezeNote + sub + '<div class="table-wrap"><table class="board"><thead><tr><th>Team</th><th class="num">Week-start balance</th><th class="num">Half</th><th class="num">Wagered</th><th class="num"># Wagers</th>' + statusHeader + '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
   }
 
   function complianceCsvText(){
@@ -1920,9 +1921,9 @@
     var label = currentWeekLabel(currentWeekGamesAsOf(complianceReferenceTime()));
     var rows = halfPointsReport().slice().sort(function(a, b){ return b.shortBy - a.shortBy; });
     var lines = [['Week', label || ''].map(csvField).join(',')];
-    lines.push(['Team','Week-start balance','Half','Wagered','Short By'].map(csvField).join(','));
+    lines.push(['Team','Week-start balance','Half','Wagered','# Wagers','Short By'].map(csvField).join(','));
     rows.forEach(function(r){
-      lines.push([r.team, r.balance, fmtHalf(r.required), r.wagered, fmtHalf(r.shortBy)].map(csvField).join(','));
+      lines.push([r.team, r.balance, fmtHalf(r.required), r.wagered, r.wagerCount, fmtHalf(r.shortBy)].map(csvField).join(','));
     });
     return lines.join('\r\n') + '\r\n';
   }
