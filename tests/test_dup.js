@@ -177,7 +177,8 @@ function toLocalInputValue(d) {
   await form.locator('button[type="submit"]').click();
   await page.waitForTimeout(150);
 
-  // --- Viewed AS the second player: own pick visible, first player's picks hidden ---
+  // --- Viewed AS the second player: own pick visible, no hint the first
+  // player's picks even exist (not even a "hidden until kickoff" note) ---
   await page.click('button[data-action="set-tab"][data-tab="picks"]');
   await page.waitForTimeout(150);
   let ourCardText = await picksCardText();
@@ -186,8 +187,8 @@ function toLocalInputValue(d) {
   if (!ourCardText.includes('Testers Squad B') || !ourCardText.includes('120')) {
     throw new Error('FAIL: expected duptester2 to see their OWN pick before kickoff, got: ' + ourCardText);
   }
-  if (!ourCardText.toLowerCase().includes('other pick') || !ourCardText.toLowerCase().includes('hidden until kickoff')) {
-    throw new Error('FAIL: expected the OTHER player\'s picks to still show a "hidden until kickoff" note, got: ' + ourCardText);
+  if (ourCardText.toLowerCase().includes('other pick') || ourCardText.toLowerCase().includes('hidden until kickoff')) {
+    throw new Error('FAIL: expected NO hint that other picks exist before kickoff, got: ' + ourCardText);
   }
   // The first player's team name must not leak into the second player's view.
   const rowTexts = await page.evaluate(() => {
@@ -203,19 +204,17 @@ function toLocalInputValue(d) {
   if (rowTexts.includes('Dup Testers')) throw new Error('FAIL: first player\'s picks leaked into second player\'s All Picks view: ' + JSON.stringify(rowTexts));
   if (!rowTexts.includes('Testers Squad B')) throw new Error('FAIL: expected duptester2\'s own row to be visible: ' + JSON.stringify(rowTexts));
 
-  // --- Viewed as a logged-out visitor: NEITHER player's picks should show ---
+  // --- Viewed as a logged-out visitor: no card at all for this game, since
+  // a logged-out visitor has no picks of their own and even a bare "hidden"
+  // note would reveal that picks exist ---
   await page.click('button[data-action="log-out"]');
   await page.waitForTimeout(150);
   await page.click('button[data-action="set-tab"][data-tab="picks"]');
   await page.waitForTimeout(150);
   ourCardText = await picksCardText();
   console.log('All Picks (logged out) BEFORE kickoff:', ourCardText);
-  if (!ourCardText) throw new Error('FAIL: expected a card for this game, found none');
-  if (ourCardText.includes('Dup Testers') || ourCardText.includes('Testers Squad B')) {
-    throw new Error('FAIL: a pick leaked to a logged-out visitor before kickoff: ' + ourCardText);
-  }
-  if (!ourCardText.toLowerCase().includes('hidden until kickoff')) {
-    throw new Error('FAIL: expected a "hidden until kickoff" message for a logged-out visitor, got: ' + ourCardText);
+  if (ourCardText !== null) {
+    throw new Error('FAIL: expected no card at all for a still-open game (no hint that picks exist) for a logged-out visitor, got: ' + ourCardText);
   }
 
   // --- After kickoff (simulated via admin edit), picks SHOULD be visible to everyone ---

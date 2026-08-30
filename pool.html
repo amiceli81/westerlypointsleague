@@ -2330,15 +2330,13 @@
         // Everyone ELSE's picks stay hidden until this specific game kicks
         // off, so nobody can shape their pick around what others already
         // chose -- but a player can always see their OWN picks here, on any
-        // game, whether or not it's started yet.
+        // game, whether or not it's started yet. No hint that other picks
+        // exist at all: even a bare "picks are hidden" card would reveal
+        // that someone has wagered, so a game with no picks of the
+        // CURRENT player's own simply doesn't appear here yet.
         var ownWs = currentPlayer ? ws.filter(function(w){ return w.player === currentPlayer; }) : [];
-        var otherCount = ws.length - ownWs.length;
-        var body = '';
-        if(ownWs.length) body += table(rowsFor(ownWs, g));
-        // Deliberately doesn't say how many -- even the count could nudge a
-        // player's own pick (e.g. "barely anyone's wagered, I'll wait").
-        if(otherCount > 0) body += '<div class="empty" style="border:none">Other picks made on this game — hidden until kickoff.</div>';
-        html += '<div class="card">' + title + body + '</div>';
+        if(!ownWs.length) return;
+        html += '<div class="card">' + title + table(rowsFor(ownWs, g)) + '</div>';
         return;
       }
       html += '<div class="card">' + title + table(rowsFor(ws, g)) + '</div>';
