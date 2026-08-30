@@ -81,3 +81,14 @@ it, it just gives you a second copy running on your own domain.
 - **Back up the database.** Since this deployment has no equivalent to the
   Claude Artifact's own version history, periodically export the
   `pool_state` table from phpMyAdmin (Export → SQL) as a safety net.
+- **Password reset actually emails a code here.** The Claude Artifact has no
+  way to send real email, so its "forgot password" just checks that the
+  username and email you type match what's on file, client-side, and lets
+  you straight through -- meaning anyone who knows or guesses a teammate's
+  email could reset their password there. This deployment has a real
+  backend, so it emails a one-time 6-digit code (via PHP's built-in `mail()`)
+  to the address on file; only someone with access to that inbox can
+  complete the reset. If codes aren't arriving, check the player's spam
+  folder first — Hostinger's shared-hosting `mail()` deliverability varies;
+  switching to real SMTP (e.g. PHPMailer with an SMTP account) is a
+  reasonable follow-up if it's unreliable.

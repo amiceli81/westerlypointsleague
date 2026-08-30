@@ -54,6 +54,150 @@ try {
         exit;
     }
 
+    if ($action === 'request-reset' && $method === 'POST') {
+        $raw = file_get_contents('php://input');
+        $body = json_decode($raw, true);
+        if (!is_array($body)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'bad_request']);
+            exit;
+        }
+        $providedKey = isset($body['key']) ? (string)$body['key'] : '';
+        if (!hash_equals($SAVE_KEY, $providedKey)) {
+            http_response_code(403);
+            echo json_encode(['error' => 'forbidden']);
+            exit;
+        }
+        $username = strtolower(trim((string)($body['username'] ?? '')));
+        $email = strtolower(trim((string)($body['email'] ?? '')));
+
+        $pdo = db();
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare('SELECT version, data FROM pool_state WHERE id = 1 FOR UPDATE');
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            $pdo->rollBack();
+            http_response_code(500);
+            echo json_encode(['error' => 'no_state']);
+            exit;
+        }
+        $data = json_decode($row['data'], true);
+
+        $matchedPlayer = null;
+        foreach ($data['players'] as &$p) {
+            if (($p['username'] ?? '') === $username && $email !== '' && strtolower(trim((string)($p['email'] ?? ''))) === $email) {
+                $matchedPlayer =& $p;
+                break;
+            }
+        }
+        unset($p);
+
+        if ($matchedPlayer !== null) {
+            // A short numeric code emailed to the address on file -- only
+            // someone with access to that inbox can complete the reset from
+            // here, unlike the old version which just trusted whatever
+            // email the requester typed in.
+            $code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            $matchedPlayer['resetCodeHash'] = hash('sha256', $code);
+            $matchedPlayer['resetCodeExpiresAt'] = gmdate('c', time() + 30 * 60);
+
+            $newVersion = (int)$row['version'] + 1;
+            $upd = $pdo->prepare('UPDATE pool_state SET version = ?, data = ? WHERE id = 1');
+            $upd->execute([$newVersion, json_encode($data)]);
+
+            $poolName = (string)($data['poolName'] ?? 'The Westerly Points League');
+            $subject = $poolName . ' password reset code';
+            $bodyText = "Your password reset code is: {$code}\n\nThis code expires in 30 minutes. If you didn't request a password reset, you can ignore this email.";
+            $fromHost = $_SERVER['HTTP_HOST'] ?? 'localhost';
+            $headers = "From: no-reply@{$fromHost}\r\nContent-Type: text/plain; charset=utf-8";
+            @mail($matchedPlayer['email'], $subject, $bodyText, $headers);
+        }
+
+        $pdo->commit();
+        // Same response either way -- doesn't reveal whether that
+        // username/email combination actually matched an account.
+        echo json_encode(['ok' => true]);
+        exit;
+    }
+
+    if ($action === 'complete-reset' && $method === 'POST') {
+        $raw = file_get_contents('php://input');
+        $body = json_decode($raw, true);
+        if (!is_array($body)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'bad_request']);
+            exit;
+        }
+        $providedKey = isset($body['key']) ? (string)$body['key'] : '';
+        if (!hash_equals($SAVE_KEY, $providedKey)) {
+            http_response_code(403);
+            echo json_encode(['error' => 'forbidden']);
+            exit;
+        }
+        $username = strtolower(trim((string)($body['username'] ?? '')));
+        $code = trim((string)($body['code'] ?? ''));
+        $salt = (string)($body['salt'] ?? '');
+        $passwordHash = (string)($body['passwordHash'] ?? '');
+        if ($username === '' || $code === '' || $salt === '' || $passwordHash === '') {
+            http_response_code(400);
+            echo json_encode(['error' => 'bad_request']);
+            exit;
+        }
+
+        $pdo = db();
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare('SELECT version, data FROM pool_state WHERE id = 1 FOR UPDATE');
+        $stmt->execute();
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            $pdo->rollBack();
+            http_response_code(500);
+            echo json_encode(['error' => 'no_state']);
+            exit;
+        }
+        $data = json_decode($row['data'], true);
+
+        $matchedPlayer = null;
+        foreach ($data['players'] as &$p) {
+            if (($p['username'] ?? '') === $username) {
+                $matchedPlayer =& $p;
+                break;
+            }
+        }
+        unset($p);
+
+        // The code -- not the username/email guess this replaced -- is what
+        // actually authorizes the change, so this is the one place that
+        // matters for keeping someone else's account safe from a teammate
+        // who merely knows (or guesses) their username and email.
+        $valid = $matchedPlayer !== null
+            && !empty($matchedPlayer['resetCodeHash'])
+            && !empty($matchedPlayer['resetCodeExpiresAt'])
+            && hash_equals((string)$matchedPlayer['resetCodeHash'], hash('sha256', $code))
+            && strtotime((string)$matchedPlayer['resetCodeExpiresAt']) >= time();
+
+        if (!$valid) {
+            $pdo->rollBack();
+            http_response_code(400);
+            echo json_encode(['error' => 'invalid_code']);
+            exit;
+        }
+
+        $matchedPlayer['salt'] = $salt;
+        $matchedPlayer['passwordHash'] = $passwordHash;
+        unset($matchedPlayer['resetCodeHash']);
+        unset($matchedPlayer['resetCodeExpiresAt']);
+
+        $newVersion = (int)$row['version'] + 1;
+        $upd = $pdo->prepare('UPDATE pool_state SET version = ?, data = ? WHERE id = 1');
+        $upd->execute([$newVersion, json_encode($data)]);
+        $pdo->commit();
+
+        echo json_encode(['version' => $newVersion, 'data' => json_decode(json_encode($data))]);
+        exit;
+    }
+
     if ($action === 'save' && $method === 'POST') {
         $raw = file_get_contents('php://input');
         $body = json_decode($raw, true);

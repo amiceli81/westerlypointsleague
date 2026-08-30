@@ -389,6 +389,156 @@ def main():
         'the download-roster-backup action handler',
     )
 
+    # --- Password reset: pool.html's version just checks the typed email
+    # against the one on file, client-side, and lets the reset straight
+    # through -- fine for the Artifact, which has no way to send real email.
+    # The Hostinger deployment has a real backend, so it gets the real thing:
+    # a one-time code emailed to the address on file (api.php's
+    # request-reset/complete-reset actions), so a teammate who merely knows
+    # or guesses someone's email can no longer reset their password. ---
+
+    script = replace_once(
+        script,
+        "    authMode: 'signup',\n"
+        "    resetVerifiedUsername: null,\n",
+        "    authMode: 'signup',\n"
+        "    resetRequestedUsername: null,\n",
+        'the resetVerifiedUsername view-state field (renamed: a code is now required, not just an email match)',
+    )
+
+    script = replace_once(
+        script,
+        "    } else if(mode === 'reset'){\n"
+        "      if(!view.resetVerifiedUsername){\n"
+        "        form = '<form class=\"panel\" id=\"auth-card\" data-action=\"verify-reset\">' +\n"
+        "          '<p class=\"hint\">Enter your username and the email on file for it to set a new password. There\\'s no real email sent — this just checks the two match.</p>' +\n"
+        "          '<div class=\"grid2\">' +\n"
+        "            '<div class=\"field\"><label>Username</label><input name=\"username\" autocomplete=\"username\" required></div>' +\n"
+        "            '<div class=\"field\"><label>Email on file</label><input type=\"email\" name=\"email\" required></div>' +\n"
+        "          '</div>' +\n"
+        "          '<div class=\"pick-actions\"><button type=\"button\" class=\"linklike\" data-action=\"auth-mode\" data-mode=\"login\">Back to log in</button><button class=\"btn\" type=\"submit\">Continue</button></div>' +\n"
+        "        '</form>';\n"
+        "      } else {\n"
+        "        form = '<form class=\"panel\" id=\"auth-card\" data-action=\"reset-password\">' +\n"
+        "          '<p class=\"hint\">Set a new password for <strong>' + esc(view.resetVerifiedUsername) + '</strong>.</p>' +\n"
+        "          '<div class=\"grid2\">' +\n"
+        "            '<div class=\"field\"><label>New password</label><input type=\"password\" name=\"password\" minlength=\"6\" autocomplete=\"new-password\" required></div>' +\n"
+        "            '<div class=\"field\"><label>Confirm new password</label><input type=\"password\" name=\"confirmPassword\" minlength=\"6\" autocomplete=\"new-password\" required></div>' +\n"
+        "          '</div>' +\n"
+        "          '<div class=\"pick-actions\"><button type=\"button\" class=\"linklike\" data-action=\"auth-mode\" data-mode=\"login\">Cancel</button><button class=\"btn\" type=\"submit\">Reset password</button></div>' +\n"
+        "        '</form>';\n"
+        "      }\n"
+        "    } else {",
+        "    } else if(mode === 'reset'){\n"
+        "      if(!view.resetRequestedUsername){\n"
+        "        form = '<form class=\"panel\" id=\"auth-card\" data-action=\"request-reset-code\">' +\n"
+        "          '<p class=\"hint\">Enter your username and the email on file for it. If they match, we\\'ll email a one-time code to that address.</p>' +\n"
+        "          '<div class=\"grid2\">' +\n"
+        "            '<div class=\"field\"><label>Username</label><input name=\"username\" autocomplete=\"username\" required></div>' +\n"
+        "            '<div class=\"field\"><label>Email on file</label><input type=\"email\" name=\"email\" required></div>' +\n"
+        "          '</div>' +\n"
+        "          '<div class=\"pick-actions\"><button type=\"button\" class=\"linklike\" data-action=\"auth-mode\" data-mode=\"login\">Back to log in</button><button class=\"btn\" type=\"submit\">Send reset code</button></div>' +\n"
+        "        '</form>';\n"
+        "      } else {\n"
+        "        form = '<form class=\"panel\" id=\"auth-card\" data-action=\"complete-reset\">' +\n"
+        "          '<p class=\"hint\">Enter the code emailed to <strong>' + esc(view.resetRequestedUsername) + '</strong>\\'s address, and set a new password. The code expires in 30 minutes.</p>' +\n"
+        "          '<div class=\"field\"><label>Reset code</label><input name=\"code\" autocomplete=\"one-time-code\" inputmode=\"numeric\" required></div>' +\n"
+        "          '<div class=\"grid2\">' +\n"
+        "            '<div class=\"field\"><label>New password</label><input type=\"password\" name=\"password\" minlength=\"6\" autocomplete=\"new-password\" required></div>' +\n"
+        "            '<div class=\"field\"><label>Confirm new password</label><input type=\"password\" name=\"confirmPassword\" minlength=\"6\" autocomplete=\"new-password\" required></div>' +\n"
+        "          '</div>' +\n"
+        "          '<div class=\"pick-actions\"><button type=\"button\" class=\"linklike\" data-action=\"auth-mode\" data-mode=\"login\">Cancel</button><button class=\"btn\" type=\"submit\">Reset password</button></div>' +\n"
+        "        '</form>';\n"
+        "      }\n"
+        "    } else {",
+        'the reset-mode auth panel (email match -> emailed one-time code)',
+    )
+
+    script = replace_once(
+        script,
+        "      view.authMode = el.getAttribute('data-mode');\n"
+        "      if(view.authMode !== 'reset') view.resetVerifiedUsername = null;\n",
+        "      view.authMode = el.getAttribute('data-mode');\n"
+        "      if(view.authMode !== 'reset') view.resetRequestedUsername = null;\n",
+        'clearing resetVerifiedUsername when leaving reset mode',
+    )
+
+    script = replace_once(
+        script,
+        "    } else if(action === 'verify-reset'){\n"
+        "      var vrUsername = normalizeUsername(fd.get('username'));\n"
+        "      var vrEmail = String(fd.get('email')||'').trim().toLowerCase();\n"
+        "      var vrProfile = findPlayer(vrUsername);\n"
+        "      // No real email is sent -- this just checks the username and email on\n"
+        "      // file match, then lets them straight through to set a new password.\n"
+        "      if(!vrProfile || !vrProfile.email || vrProfile.email.trim().toLowerCase() !== vrEmail){\n"
+        "        toast('No account matches that username and email.');\n"
+        "        return;\n"
+        "      }\n"
+        "      view.resetVerifiedUsername = vrProfile.username;\n"
+        "      render();\n"
+        "    } else if(action === 'reset-password'){\n"
+        "      if(!view.resetVerifiedUsername) return;\n"
+        "      var rpProfile = findPlayer(view.resetVerifiedUsername);\n"
+        "      if(!rpProfile){ view.resetVerifiedUsername = null; render(); return; }\n"
+        "      var rpPassword = String(fd.get('password')||'');\n"
+        "      var rpConfirm = String(fd.get('confirmPassword')||'');\n"
+        "      if(rpPassword.length < 6){ toast('Password needs at least 6 characters.'); return; }\n"
+        "      if(rpPassword !== rpConfirm){ toast('Passwords don\\'t match.'); return; }\n"
+        "      hashNewPassword(rpPassword).then(function(hashed){\n"
+        "        rpProfile.salt = hashed.salt;\n"
+        "        rpProfile.passwordHash = hashed.hash;\n"
+        "        view.resetVerifiedUsername = null;\n"
+        "        view.authMode = 'login';\n"
+        "        save('Password reset — you can log in with your new password now.');\n"
+        "      });\n",
+        "    } else if(action === 'request-reset-code'){\n"
+        "      var rrUsername = normalizeUsername(fd.get('username'));\n"
+        "      var rrEmail = String(fd.get('email')||'').trim().toLowerCase();\n"
+        "      fetch('api.php?action=request-reset', {\n"
+        "        method: 'POST',\n"
+        "        headers: { 'Content-Type': 'application/json' },\n"
+        "        body: JSON.stringify({ username: rrUsername, email: rrEmail, key: SAVE_KEY })\n"
+        "      }).then(function(){\n"
+        "        view.resetRequestedUsername = rrUsername;\n"
+        "        render();\n"
+        "        toast('If that username and email match an account, a reset code has been emailed to it.', 5000);\n"
+        "      }).catch(function(){\n"
+        "        toast('Could not reach the server — please try again.');\n"
+        "      });\n"
+        "    } else if(action === 'complete-reset'){\n"
+        "      if(!view.resetRequestedUsername) return;\n"
+        "      var crCode = String(fd.get('code')||'').trim();\n"
+        "      var crPassword = String(fd.get('password')||'');\n"
+        "      var crConfirm = String(fd.get('confirmPassword')||'');\n"
+        "      if(crPassword.length < 6){ toast('Password needs at least 6 characters.'); return; }\n"
+        "      if(crPassword !== crConfirm){ toast('Passwords don\\'t match.'); return; }\n"
+        "      var crUsername = view.resetRequestedUsername;\n"
+        "      hashNewPassword(crPassword).then(function(hashed){\n"
+        "        return fetch('api.php?action=complete-reset', {\n"
+        "          method: 'POST',\n"
+        "          headers: { 'Content-Type': 'application/json' },\n"
+        "          body: JSON.stringify({ username: crUsername, code: crCode, salt: hashed.salt, passwordHash: hashed.hash, key: SAVE_KEY })\n"
+        "        });\n"
+        "      }).then(function(res){\n"
+        "        return res.json().then(function(body){ return { status: res.status, body: body }; });\n"
+        "      }).then(function(result){\n"
+        "        if(result.status === 200){\n"
+        "          state = applyPendingAdditions(normalizeState(result.body.data));\n"
+        "          serverVersion = result.body.version;\n"
+        "          view.resetRequestedUsername = null;\n"
+        "          view.authMode = 'login';\n"
+        "          render();\n"
+        "          toast('Password reset — you can log in with your new password now.');\n"
+        "        } else {\n"
+        "          toast(result.body && result.body.error === 'invalid_code' ? 'That code is incorrect or has expired.' : 'Could not reset that password — please try again.');\n"
+        "        }\n"
+        "      }).catch(function(){\n"
+        "        toast('Could not reach the server — please try again.');\n"
+        "      });\n",
+        'the verify-reset/reset-password action handlers (email match -> emailed one-time code)',
+    )
+
     script = replace_once(
         script,
         "  function init(){\n"
