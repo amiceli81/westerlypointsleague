@@ -245,6 +245,7 @@
     authMode: 'signup',
     resetRequestedUsername: null,
     voidPickFilter: '',
+    voidPicksCollapsed: true,
     sportFilter: '',
     complianceSortAsc: false
   };
@@ -679,9 +680,16 @@
     // tallied anywhere except state.wagers itself (playerStats() recomputes
     // balance/W-L from it every render), so deleting the entry is the whole
     // operation -- nothing else needs reconciling afterward.
-    var head = '<div class="section-title"><h3>Void a pick</h3></div>';
+    var collapsed = view.voidPicksCollapsed;
+    var head = '<div class="section-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">' +
+      '<h3>Void a pick <span class="eyebrow">(' + state.wagers.length + ')</span></h3>' +
+      '<button type="button" class="btn ghost" data-action="toggle-void-picks">' + (collapsed ? 'Expand' : 'Collapse') + '</button>' +
+      '</div>';
     if(!state.wagers.length){
       return '<div class="card">' + head + '<div class="empty" style="border:none">No picks have been made yet.</div></div>';
+    }
+    if(collapsed){
+      return '<div class="card">' + head + '<div class="empty" style="border:none">' + state.wagers.length + ' pick' + (state.wagers.length===1?'':'s') + ' hidden — click Expand to view.</div></div>';
     }
     var sub = '<p class="eyebrow" style="margin:-6px 0 12px">Removes a wager entirely — balance and win/loss records update automatically once it\'s gone. This can\'t be undone. The side/pick itself isn\'t shown here, so voiding decisions never depend on what was picked.</p>';
     // Only players who currently have at least one wager are worth listing
@@ -717,11 +725,12 @@
         '<td>' + matchup + '<div class="eyebrow">' + meta + '</div></td>' +
         '<td>' + esc(w.type) + '</td>' +
         '<td class="num mono">' + w.points + '</td>' +
+        '<td class="eyebrow">' + esc(fmtDate(w.placedAt)) + '</td>' +
         '<td class="num"><span class="result-pill ' + result + '">' + result + '</span></td>' +
         '<td class="num"><button type="button" class="btn danger" data-action="void-pick" data-wager="' + w.id + '">Void</button></td>' +
         '</tr>';
     }).join('');
-    var table = '<div class="table-wrap"><table class="board"><thead><tr><th>Player</th><th>Game</th><th>Type</th><th class="num">Pts</th><th class="num">Result</th><th class="num"></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    var table = '<div class="table-wrap"><table class="board"><thead><tr><th>Player</th><th>Game</th><th>Type</th><th class="num">Pts</th><th>Placed</th><th class="num">Result</th><th class="num"></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
     return '<div class="card">' + head + sub + filter + table + '</div>';
   }
 
@@ -1086,11 +1095,11 @@
       body = '<div class="recap">';
       if(ats){
         var atsRes = wagerResult(ats, g);
-        body += '<div class="recap-row"><span>ATS — ' + esc(ats.pick==='home'?g.home:g.away) + ' ' + fmtLine(ats.pick==='home'?homeLine:awayLine) + ' for ' + ats.points + ' pts</span><span class="result-pill ' + atsRes + '">' + atsRes + '</span></div>';
+        body += '<div class="recap-row"><div><span>ATS — ' + esc(ats.pick==='home'?g.home:g.away) + ' ' + fmtLine(ats.pick==='home'?homeLine:awayLine) + ' for ' + ats.points + ' pts</span><div class="eyebrow" style="margin-top:2px">Placed ' + esc(fmtDate(ats.placedAt)) + '</div></div><span class="result-pill ' + atsRes + '">' + atsRes + '</span></div>';
       }
       if(ou){
         var ouRes = wagerResult(ou, g);
-        body += '<div class="recap-row"><span>O/U — ' + esc(ou.pick==='over'?'Over':'Under') + ' ' + fmtNum(g.total) + ' for ' + ou.points + ' pts</span><span class="result-pill ' + ouRes + '">' + ouRes + '</span></div>';
+        body += '<div class="recap-row"><div><span>O/U — ' + esc(ou.pick==='over'?'Over':'Under') + ' ' + fmtNum(g.total) + ' for ' + ou.points + ' pts</span><div class="eyebrow" style="margin-top:2px">Placed ' + esc(fmtDate(ou.placedAt)) + '</div></div><span class="result-pill ' + ouRes + '">' + ouRes + '</span></div>';
       }
       if(!ats && !ou) body += '<span class="eyebrow">' + (weekLocked ? 'No pick was made before your first wagered game of the week kicked off.' : 'No pick made before this game locked.') + '</span>';
       if(weekLocked) body += '<div class="recap-row"><span class="eyebrow">Picks for ' + esc(g.sport) + ' — ' + esc(g.week) + ' are locked for you — your first wagered game of the week already kicked off.</span></div>';
@@ -1107,11 +1116,11 @@
       var lockedRows = '';
       if(atsW){
         var atsResOpen = wagerResult(atsW, g);
-        lockedRows += '<div class="recap-row"><span>ATS — ' + esc(atsW.pick==='home'?g.home:g.away) + ' ' + fmtLine(atsW.pick==='home'?homeLine:awayLine) + ' for ' + atsW.points + ' pts</span><span class="result-pill ' + atsResOpen + '">' + atsResOpen + '</span></div>';
+        lockedRows += '<div class="recap-row"><div><span>ATS — ' + esc(atsW.pick==='home'?g.home:g.away) + ' ' + fmtLine(atsW.pick==='home'?homeLine:awayLine) + ' for ' + atsW.points + ' pts</span><div class="eyebrow" style="margin-top:2px">Placed ' + esc(fmtDate(atsW.placedAt)) + '</div></div><span class="result-pill ' + atsResOpen + '">' + atsResOpen + '</span></div>';
       }
       if(ouW){
         var ouResOpen = wagerResult(ouW, g);
-        lockedRows += '<div class="recap-row"><span>O/U — ' + esc(ouW.pick==='over'?'Over':'Under') + ' ' + fmtNum(g.total) + ' for ' + ouW.points + ' pts</span><span class="result-pill ' + ouResOpen + '">' + ouResOpen + '</span></div>';
+        lockedRows += '<div class="recap-row"><div><span>O/U — ' + esc(ouW.pick==='over'?'Over':'Under') + ' ' + fmtNum(g.total) + ' for ' + ouW.points + ' pts</span><div class="eyebrow" style="margin-top:2px">Placed ' + esc(fmtDate(ouW.placedAt)) + '</div></div><span class="result-pill ' + ouResOpen + '">' + ouResOpen + '</span></div>';
       }
       var lockedBlock = lockedRows ? '<div class="recap">' + lockedRows + '<span class="eyebrow">Submitted picks are locked in and can\'t be changed.</span></div>' : '';
 
@@ -1192,9 +1201,9 @@
       var res = wagerResult(w, g);
       var pickLabel = w.type === 'ATS' ? (w.pick==='home'?g.home:g.away) : (w.pick==='over'?'Over':'Under') + ' ' + fmtNum(g.total);
       var matchup = '<div>' + esc(g.away) + ' @ ' + esc(g.home) + '</div><div class="eyebrow" style="margin-top:2px">' + esc(g.sport) + ' · ' + esc(g.week) + '</div>';
-      return '<tr><td>' + matchup + '</td><td class="eyebrow">' + w.type + '</td><td>' + esc(pickLabel) + '</td><td class="num mono">' + w.points + '</td><td class="num"><span class="result-pill ' + res + '">' + res + '</span></td></tr>';
+      return '<tr><td>' + matchup + '</td><td class="eyebrow">' + w.type + '</td><td>' + esc(pickLabel) + '</td><td class="num mono">' + w.points + '</td><td class="eyebrow">' + esc(fmtDate(w.placedAt)) + '</td><td class="num"><span class="result-pill ' + res + '">' + res + '</span></td></tr>';
     }).join('');
-    return '<div class="card">' + head + '<div class="table-wrap"><table class="board"><thead><tr><th>Game</th><th>Type</th><th>Pick</th><th class="num">Pts</th><th class="num">Result</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+    return '<div class="card">' + head + '<div class="table-wrap"><table class="board"><thead><tr><th>Game</th><th>Type</th><th>Pick</th><th class="num">Pts</th><th>Placed</th><th class="num">Result</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
   }
 
   function renderPicksTab(){
@@ -1206,11 +1215,11 @@
       return list.slice().sort(function(a,b){ return displayName(a.player).localeCompare(displayName(b.player)); }).map(function(w){
         var res = wagerResult(w, g);
         var pickLabel = w.type === 'ATS' ? (w.pick==='home'?g.home:g.away) : (w.pick==='over'?'Over':'Under') + ' ' + fmtNum(g.total);
-        return '<tr><td>' + esc(displayName(w.player)) + '</td><td class="eyebrow">' + w.type + '</td><td>' + esc(pickLabel) + '</td><td class="num mono">' + w.points + '</td><td class="num"><span class="result-pill ' + res + '">' + res + '</span></td></tr>';
+        return '<tr><td>' + esc(displayName(w.player)) + '</td><td class="eyebrow">' + w.type + '</td><td>' + esc(pickLabel) + '</td><td class="num mono">' + w.points + '</td><td class="eyebrow">' + esc(fmtDate(w.placedAt)) + '</td><td class="num"><span class="result-pill ' + res + '">' + res + '</span></td></tr>';
       }).join('');
     }
     function table(rowsHtml){
-      return '<div class="table-wrap"><table class="board"><thead><tr><th>Player</th><th>Type</th><th>Pick</th><th class="num">Pts</th><th class="num">Result</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
+      return '<div class="table-wrap"><table class="board"><thead><tr><th>Player</th><th>Type</th><th>Pick</th><th class="num">Pts</th><th>Placed</th><th class="num">Result</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
     }
     // Future (not-yet-started) games never show per-game detail here -- not
     // even to the picks' own player -- since which specific game a count
@@ -1402,6 +1411,9 @@
       render();
     } else if(action === 'toggle-games-list'){
       view.gamesListCollapsed = !view.gamesListCollapsed;
+      render();
+    } else if(action === 'toggle-void-picks'){
+      view.voidPicksCollapsed = !view.voidPicksCollapsed;
       render();
     } else if(action === 'set-week-visibility'){
       if(!view.isCommissioner) return;
@@ -1738,7 +1750,7 @@
     });
     var points = parseInt(pointsRaw, 10);
     if(!pick || !points || points <= 0) return;
-    var newWager = { id: uid(), gameId: gameId, player: currentPlayer, type: type, pick: pick, points: points };
+    var newWager = { id: uid(), gameId: gameId, player: currentPlayer, type: type, pick: pick, points: points, placedAt: new Date().toISOString() };
     state.wagers.push(newWager);
     pendingAdditions.wagers.push(newWager);
   }

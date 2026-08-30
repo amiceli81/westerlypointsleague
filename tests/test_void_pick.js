@@ -53,6 +53,15 @@ function toLocalInputValue(d) {
   const voidHeading = await page.locator('.section-title h3', { hasText: 'Void a pick' }).count();
   if (voidHeading !== 1) throw new Error('FAIL: expected a "Void a pick" section in the Commissioner tab');
 
+  // Void a Pick is collapsed by default -- expand it.
+  const voidCardTop = page.locator('.card', { has: page.locator('.section-title h3', { hasText: 'Void a pick' }) });
+  const expandBtn = voidCardTop.locator('button[data-action="toggle-void-picks"]');
+  const expandBtnText = await expandBtn.innerText();
+  if (expandBtnText !== 'Expand') throw new Error('FAIL: expected Void a Pick to default to collapsed ("Expand" button), got: ' + expandBtnText);
+  console.log('PASS: Void a Pick defaults to collapsed');
+  await expandBtn.click();
+  await page.waitForTimeout(150);
+
   const voidRow = page.locator('tr', { hasText: 'Void Test Team' }).filter({ hasText: 'Void Away' });
   if (await voidRow.count() !== 1) throw new Error('FAIL: expected exactly one void-pick row for this wager, found ' + (await voidRow.count()));
   const rowText = await voidRow.innerText();
@@ -70,8 +79,8 @@ function toLocalInputValue(d) {
   }
   console.log('PASS: no "Pick" column header in Void a pick');
   const voidRowCellCount = await voidRow.locator('td').count();
-  if (voidRowCellCount !== 6) throw new Error('FAIL: expected 6 cells in a void-pick row (no separate pick cell), got ' + voidRowCellCount);
-  console.log('PASS: void-pick row has no separate pick cell (6 cells: player, game, type, pts, result, void button)');
+  if (voidRowCellCount !== 7) throw new Error('FAIL: expected 7 cells in a void-pick row (no separate pick cell), got ' + voidRowCellCount);
+  console.log('PASS: void-pick row has no separate pick cell (7 cells: player, game, type, pts, placed, result, void button)');
 
   // --- Cancel the confirm() dialog: the wager should survive ---
   page.once('dialog', dialog => dialog.dismiss());
@@ -145,6 +154,9 @@ function toLocalInputValue(d) {
   await page2.waitForTimeout(150);
   await page2.fill('form[data-action="admin-login"] input[name="pin"]', '1234');
   await page2.click('form[data-action="admin-login"] button[type="submit"]');
+  await page2.waitForTimeout(150);
+  await page2.locator('.card', { has: page2.locator('.section-title h3', { hasText: 'Void a pick' }) })
+    .locator('button[data-action="toggle-void-picks"]').click();
   await page2.waitForTimeout(150);
   const survivedForgedVoid = await page2.locator('tr', { hasText: 'forgeduser' }).filter({ hasText: 'Forged Away' }).count();
   if (survivedForgedVoid !== 1) throw new Error('FAIL: a forged void-pick dispatch without commissioner access should not have removed the wager');

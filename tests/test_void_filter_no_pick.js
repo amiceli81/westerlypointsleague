@@ -91,6 +91,11 @@ function toLocalInputValue(d) {
   await page.click('button[data-action="set-tab"][data-tab="admin"]');
   await page.waitForTimeout(150);
 
+  // Void a Pick is collapsed by default -- expand it.
+  await page.locator('.card', { has: page.locator('.section-title h3', { hasText: 'Void a pick' }) })
+    .locator('button[data-action="toggle-void-picks"]').click();
+  await page.waitForTimeout(150);
+
   const select = page.locator('select[data-action="filter-void-player"]');
   if (await select.count() !== 1) throw new Error('FAIL: expected exactly one void-pick player filter select');
   const optionTexts = await select.locator('option').allInnerTexts();

@@ -215,10 +215,10 @@ def main():
     script = replace_once(
         script,
         "    if(!pick || !points || points <= 0) return;\n"
-        "    state.wagers.push({ id: uid(), gameId: gameId, player: currentPlayer, type: type, pick: pick, points: points });\n"
+        "    state.wagers.push({ id: uid(), gameId: gameId, player: currentPlayer, type: type, pick: pick, points: points, placedAt: new Date().toISOString() });\n"
         "  }",
         "    if(!pick || !points || points <= 0) return;\n"
-        "    var newWager = { id: uid(), gameId: gameId, player: currentPlayer, type: type, pick: pick, points: points };\n"
+        "    var newWager = { id: uid(), gameId: gameId, player: currentPlayer, type: type, pick: pick, points: points, placedAt: new Date().toISOString() };\n"
         "    state.wagers.push(newWager);\n"
         "    pendingAdditions.wagers.push(newWager);\n"
         "  }",
