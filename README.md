@@ -41,7 +41,7 @@ how the app works, hand it to someone else, or rebuild it elsewhere.
   tends to get paraphrased or summarized. See its module docstring for the
   expected input shape.
 
-- **tests/** — a Playwright regression suite (25 files) covering: duplicate
+- **tests/** — a Playwright regression suite (26 files) covering: duplicate
   pick prevention, the under-wagered compliance report (including its
   Monday-8:30pm-ET freeze, the commissioner's manual "Update this week"
   override, and its own CSV export), the email/mailto composer,
@@ -61,7 +61,10 @@ how the app works, hand it to someone else, or rebuild it elsewhere.
   their wagers), per-player paid/buy-back/pay-type tracking (in the Boot
   a Player card), the leaderboard's CSV export, the void-picks player
   filter, the This Week sport filter, rejecting a
-  duplicate team name at signup, the All Picks tab's "Pending Picks"
+  duplicate team name at signup, a finished game dropping off the
+  Commissioner tab's "Games on the board" list automatically (with a
+  "Show finished games" toggle to bring them back for a Reopen), the All
+  Picks tab's "Pending Picks"
   count for games that haven't started, the under-wagered report's
   per-player wager count (in both the on-page table and its CSV export),
   and the pick form's reminder of how many more points a player still

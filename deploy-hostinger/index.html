@@ -245,6 +245,7 @@
     viewingPlayer: null,
     playerPicksWeekFilter: '',
     gamesListCollapsed: false,
+    showFinishedGames: false,
     isCommissioner: false,
     readOnly: false,
     capabilityChecked: false,
@@ -1456,16 +1457,26 @@
         '</form></div>';
     }
 
-    var games = sortedGames();
+    var allBoardGames = sortedGames();
     var collapsed = view.gamesListCollapsed;
+    // A final game drops off the board automatically (same idea as This
+    // Week's "show locked games" toggle) so the list stays focused on
+    // what's still in play -- the toggle below is an opt-in way to glance
+    // back at finished games (e.g. to Reopen one that was settled wrong).
+    var games = view.showFinishedGames ? allBoardGames : allBoardGames.filter(function(g){ return g.status !== 'final'; });
+    var finishedCount = allBoardGames.length - allBoardGames.filter(function(g){ return g.status !== 'final'; }).length;
     var gamesList = '<div class="card"><div class="section-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">' +
       '<h3>Games on the board <span class="eyebrow">(' + games.length + ')</span></h3>' +
-      (games.length ? '<button type="button" class="btn ghost" data-action="toggle-games-list">' + (collapsed ? 'Expand' : 'Collapse') + '</button>' : '') +
-      '</div>';
-    if(!games.length){
+      '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+      (finishedCount ? '<label class="toggle"><input type="checkbox" data-action="toggle-finished-games" ' + (view.showFinishedGames?'checked':'') + '> Show finished games (' + finishedCount + ')</label>' : '') +
+      (allBoardGames.length ? '<button type="button" class="btn ghost" data-action="toggle-games-list">' + (collapsed ? 'Expand' : 'Collapse') + '</button>' : '') +
+      '</div></div>';
+    if(!allBoardGames.length){
       gamesList += '<div class="empty" style="border:none">No games yet — sync in this week\'s odds to load matchups.</div>';
     } else if(collapsed){
       gamesList += '<div class="empty" style="border:none">' + games.length + ' game' + (games.length===1?'':'s') + ' hidden — click Expand to view.</div>';
+    } else if(!games.length){
+      gamesList += '<div class="empty" style="border:none">Every game has finished. Toggle "show finished games" above to review them.</div>';
     } else {
       games.forEach(function(g){
         gamesList += '<div class="admin-game-row"><div><strong>' + esc(g.away) + ' @ ' + esc(g.home) + '</strong><div class="meta">' + esc(g.sport) + ' · ' + esc(g.week) + ' · ' + (g.favorite==='home'?esc(g.home):esc(g.away)) + ' ' + fmtLine(-g.spread) + ' · O/U ' + fmtNum(g.total) + (g.status==='final' ? ' · Final ' + g.finalAway + '-' + g.finalHome : '') + '</div></div>' +
@@ -1582,6 +1593,9 @@
       render();
     } else if(action === 'toggle-games-list'){
       view.gamesListCollapsed = !view.gamesListCollapsed;
+      render();
+    } else if(action === 'toggle-finished-games'){
+      view.showFinishedGames = el.checked;
       render();
     } else if(action === 'toggle-void-picks'){
       view.voidPicksCollapsed = !view.voidPicksCollapsed;
