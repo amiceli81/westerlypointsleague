@@ -162,7 +162,7 @@ function toLocalInputValue(d) {
       const cards = Array.from(document.querySelectorAll('.card'));
       const c = cards.find(c => {
         const h3 = c.querySelector('.section-title h3');
-        return h3 && h3.textContent.trim() === 'Future picks';
+        return h3 && h3.textContent.trim() === 'Pending Picks';
       });
       if (!c) return null;
       return Array.from(c.querySelectorAll('table.board tbody tr')).map(tr =>
@@ -203,7 +203,7 @@ function toLocalInputValue(d) {
   }
   let futureRows = await futurePicksRows();
   console.log('Future picks rows (as duptester2):', JSON.stringify(futureRows));
-  if (!futureRows) throw new Error('FAIL: expected a "Future picks" summary card to exist');
+  if (!futureRows) throw new Error('FAIL: expected a "Pending Picks" summary card to exist');
   // Dup Testers has 2 pending picks (ATS + OU) on this game; Testers Squad B
   // (duptester2) has 1 (ATS only) -- both counts, no game names or picks.
   const dupRow = futureRows.find(r => r[0] === 'Dup Testers');

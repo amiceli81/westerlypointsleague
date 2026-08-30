@@ -1394,7 +1394,7 @@
     if(futureOrder.length){
       var futureRows = futureOrder.slice().sort(function(a,b){ return displayName(a).localeCompare(displayName(b)); })
         .map(function(p){ return '<tr><td>' + esc(displayName(p)) + '</td><td class="num mono">' + futureCounts[p] + '</td></tr>'; }).join('');
-      futureSection = '<div class="card"><div class="section-title"><h3>Future picks</h3><p class="eyebrow" style="margin:4px 0 0">How many picks each player has made on games that haven\'t started yet — not which games or what they picked.</p></div>' +
+      futureSection = '<div class="card"><div class="section-title"><h3>Pending Picks</h3><p class="eyebrow" style="margin:4px 0 0">How many picks each player has made on games that haven\'t started yet — not which games or what they picked.</p></div>' +
         '<div class="table-wrap"><table class="board"><thead><tr><th>Player</th><th class="num">Picks pending</th></tr></thead><tbody>' + futureRows + '</tbody></table></div></div>';
     }
 
