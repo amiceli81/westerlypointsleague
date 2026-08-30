@@ -2321,26 +2321,36 @@
     function table(rowsHtml){
       return '<div class="table-wrap"><table class="board"><thead><tr><th>Player</th><th>Type</th><th>Pick</th><th class="num">Pts</th><th class="num">Result</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
     }
+    // Future (not-yet-started) games never show per-game detail here -- not
+    // even to the picks' own player -- since which specific game a count
+    // comes from would start to reveal what was picked. Instead, tally a
+    // simple count of pending picks per player across every future game,
+    // with no game names or pick details attached to it.
+    var futureCounts = {};
+    var futureOrder = [];
+    state.wagers.forEach(function(w){
+      var g = gameById(w.gameId);
+      if(!g || isLocked(g)) return;
+      if(futureCounts[w.player] === undefined){ futureCounts[w.player] = 0; futureOrder.push(w.player); }
+      futureCounts[w.player]++;
+    });
+    var futureSection = '';
+    if(futureOrder.length){
+      var futureRows = futureOrder.slice().sort(function(a,b){ return displayName(a).localeCompare(displayName(b)); })
+        .map(function(p){ return '<tr><td>' + esc(displayName(p)) + '</td><td class="num mono">' + futureCounts[p] + '</td></tr>'; }).join('');
+      futureSection = '<div class="card"><div class="section-title"><h3>Future picks</h3><p class="eyebrow" style="margin:4px 0 0">How many picks each player has made on games that haven\'t started yet — not which games or what they picked.</p></div>' +
+        '<div class="table-wrap"><table class="board"><thead><tr><th>Player</th><th class="num">Picks pending</th></tr></thead><tbody>' + futureRows + '</tbody></table></div></div>';
+    }
+
     var html = '';
     games.forEach(function(g){
+      if(!isLocked(g)) return;
       var ws = state.wagers.filter(function(w){ return w.gameId === g.id; });
       if(!ws.length) return;
       var title = '<div class="section-title"><h3>' + esc(g.away) + ' @ ' + esc(g.home) + '<span class="eyebrow" style="margin-left:8px">' + esc(g.sport) + ' · ' + esc(g.week) + '</span></h3></div>';
-      if(!isLocked(g)){
-        // Everyone ELSE's picks stay hidden until this specific game kicks
-        // off, so nobody can shape their pick around what others already
-        // chose -- but a player can always see their OWN picks here, on any
-        // game, whether or not it's started yet. No hint that other picks
-        // exist at all: even a bare "picks are hidden" card would reveal
-        // that someone has wagered, so a game with no picks of the
-        // CURRENT player's own simply doesn't appear here yet.
-        var ownWs = currentPlayer ? ws.filter(function(w){ return w.player === currentPlayer; }) : [];
-        if(!ownWs.length) return;
-        html += '<div class="card">' + title + table(rowsFor(ownWs, g)) + '</div>';
-        return;
-      }
       html += '<div class="card">' + title + table(rowsFor(ws, g)) + '</div>';
     });
+    html = futureSection + html;
     return html || '<div class="empty">No picks placed yet.</div>';
   }
 

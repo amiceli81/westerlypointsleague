@@ -157,6 +157,20 @@ function toLocalInputValue(d) {
     });
   }
 
+  function futurePicksRows() {
+    return page.evaluate(() => {
+      const cards = Array.from(document.querySelectorAll('.card'));
+      const c = cards.find(c => {
+        const h3 = c.querySelector('.section-title h3');
+        return h3 && h3.textContent.trim() === 'Future picks';
+      });
+      if (!c) return null;
+      return Array.from(c.querySelectorAll('table.board tbody tr')).map(tr =>
+        Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim())
+      );
+    });
+  }
+
   // --- A SECOND player wagers on the same still-open game ---
   await page.click('button[data-action="log-out"]');
   await page.waitForTimeout(150);
@@ -177,44 +191,43 @@ function toLocalInputValue(d) {
   await form.locator('button[type="submit"]').click();
   await page.waitForTimeout(150);
 
-  // --- Viewed AS the second player: own pick visible, no hint the first
-  // player's picks even exist (not even a "hidden until kickoff" note) ---
+  // --- Viewed AS the second player: no per-game card at all before kickoff
+  // (not even their own), only the "Future picks" count-by-player summary,
+  // which never names a game or what was picked ---
   await page.click('button[data-action="set-tab"][data-tab="picks"]');
   await page.waitForTimeout(150);
   let ourCardText = await picksCardText();
-  console.log('All Picks (as duptester2) BEFORE kickoff:', ourCardText);
-  if (!ourCardText) throw new Error('FAIL: expected a card for this game, found none');
-  if (!ourCardText.includes('Testers Squad B') || !ourCardText.includes('120')) {
-    throw new Error('FAIL: expected duptester2 to see their OWN pick before kickoff, got: ' + ourCardText);
+  console.log('All Picks (as duptester2) BEFORE kickoff -- per-game card:', ourCardText);
+  if (ourCardText !== null) {
+    throw new Error('FAIL: expected no per-game card at all before kickoff, got: ' + ourCardText);
   }
-  if (ourCardText.toLowerCase().includes('other pick') || ourCardText.toLowerCase().includes('hidden until kickoff')) {
-    throw new Error('FAIL: expected NO hint that other picks exist before kickoff, got: ' + ourCardText);
-  }
-  // The first player's team name must not leak into the second player's view.
-  const rowTexts = await page.evaluate(() => {
-    const cards = Array.from(document.querySelectorAll('.card'));
-    const c = cards.find(c => {
-      const h3 = c.querySelector('.section-title h3');
-      return h3 && h3.textContent.includes('Away Team') && h3.textContent.includes('Home Team');
-    });
-    if (!c) return [];
-    return Array.from(c.querySelectorAll('table.board tbody tr td:first-child')).map(td => td.textContent.trim());
-  });
-  console.log('Visible player names (as duptester2):', rowTexts);
-  if (rowTexts.includes('Dup Testers')) throw new Error('FAIL: first player\'s picks leaked into second player\'s All Picks view: ' + JSON.stringify(rowTexts));
-  if (!rowTexts.includes('Testers Squad B')) throw new Error('FAIL: expected duptester2\'s own row to be visible: ' + JSON.stringify(rowTexts));
+  let futureRows = await futurePicksRows();
+  console.log('Future picks rows (as duptester2):', JSON.stringify(futureRows));
+  if (!futureRows) throw new Error('FAIL: expected a "Future picks" summary card to exist');
+  // Dup Testers has 2 pending picks (ATS + OU) on this game; Testers Squad B
+  // (duptester2) has 1 (ATS only) -- both counts, no game names or picks.
+  const dupRow = futureRows.find(r => r[0] === 'Dup Testers');
+  const squadBRow = futureRows.find(r => r[0] === 'Testers Squad B');
+  if (!dupRow || dupRow[1] !== '2') throw new Error('FAIL: expected Dup Testers to show 2 future picks, got: ' + JSON.stringify(dupRow));
+  if (!squadBRow || squadBRow[1] !== '1') throw new Error('FAIL: expected Testers Squad B to show 1 future pick, got: ' + JSON.stringify(squadBRow));
+  const futureText = futureRows.map(r => r.join(' ')).join(' | ');
+  if (/Away Team|Home Team/.test(futureText)) throw new Error('FAIL: the future-picks summary should never name a game, got: ' + futureText);
 
-  // --- Viewed as a logged-out visitor: no card at all for this game, since
-  // a logged-out visitor has no picks of their own and even a bare "hidden"
-  // note would reveal that picks exist ---
+  // --- Viewed as a logged-out visitor: same story -- no per-game card, but
+  // the future-picks counts (counts only, no picks) are visible to anyone ---
   await page.click('button[data-action="log-out"]');
   await page.waitForTimeout(150);
   await page.click('button[data-action="set-tab"][data-tab="picks"]');
   await page.waitForTimeout(150);
   ourCardText = await picksCardText();
-  console.log('All Picks (logged out) BEFORE kickoff:', ourCardText);
+  console.log('All Picks (logged out) BEFORE kickoff -- per-game card:', ourCardText);
   if (ourCardText !== null) {
-    throw new Error('FAIL: expected no card at all for a still-open game (no hint that picks exist) for a logged-out visitor, got: ' + ourCardText);
+    throw new Error('FAIL: expected no per-game card at all for a still-open game for a logged-out visitor, got: ' + ourCardText);
+  }
+  futureRows = await futurePicksRows();
+  console.log('Future picks rows (logged out):', JSON.stringify(futureRows));
+  if (!futureRows || !futureRows.find(r => r[0] === 'Dup Testers' && r[1] === '2') || !futureRows.find(r => r[0] === 'Testers Squad B' && r[1] === '1')) {
+    throw new Error('FAIL: expected the future-picks counts to still show for a logged-out visitor, got: ' + JSON.stringify(futureRows));
   }
 
   // --- After kickoff (simulated via admin edit), picks SHOULD be visible to everyone ---
