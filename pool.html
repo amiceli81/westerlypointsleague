@@ -2487,7 +2487,13 @@
     } else if(action === 'save-picks'){
       var gameId = form.getAttribute('data-game');
       var g = gameById(gameId);
-      if(!g || !currentPlayer || isLocked(g) || isWeekLockedForPlayer(g, currentPlayer)) return;
+      if(!g || !currentPlayer || isLocked(g)) return;
+      // The form itself is only rendered while the player isn't week-locked,
+      // but a stale render (this game's kickoff was still in the future when
+      // the page last drew it, and their first wagered game of the week has
+      // since kicked off) can still post here -- tell them why it didn't
+      // save instead of silently doing nothing.
+      if(isWeekLockedForPlayer(g, currentPlayer)){ toast('Your first game has kicked off already.'); return; }
       // Once a market has a submitted wager, it's final -- never overwrite an
       // existing pick, even if a stale form somehow still posts one (the UI
       // itself stops rendering an editable field for an already-submitted

@@ -139,4 +139,105 @@ function toLocalInputValue(d) {
 
   console.log('ALL WEEK-LOCK TESTS PASSED');
   await browser.close();
+
+  // --- Stale-form race: a page that was rendered just BEFORE the earliest
+  // wagered game kicked off can still have another game's editable pick
+  // form on screen after that kickoff passes for real, since nothing
+  // re-renders the page on its own as wall-clock time moves forward. If the
+  // player submits that stale form, the app must reject it with a clear
+  // popup rather than silently doing nothing.
+  //
+  // The admin "edit game" form's kickoff input is a plain datetime-local
+  // field (minute precision, no seconds), so it can't express "a couple of
+  // seconds from now" -- building a fresh fixture with full-precision ISO
+  // kickoffs seeded directly into state (same technique test_rules.js uses
+  // for its read-only fixture) sidesteps that entirely.
+  const fs = require('fs');
+  const html = fs.readFileSync('/tmp/test_dup_full.html', 'utf8');
+  const m2 = html.match(/(<script id="state-data" type="application\/json">)([\s\S]*?)(<\/script>)/);
+  const data = JSON.parse(m2[2]);
+  const raceEarlyId = 'race-early';
+  const raceLateId = 'race-late';
+  data.games.push({
+    id: raceEarlyId, sport: 'NFL', week: 'Race Week', away: 'Away RaceEarly', home: 'Home RaceEarly',
+    favorite: 'home', spread: 3, total: 44, kickoff: new Date(Date.now() + 2500).toISOString(),
+    status: 'open', finalHome: null, finalAway: null, order: 9001,
+  });
+  data.games.push({
+    id: raceLateId, sport: 'NFL', week: 'Race Week', away: 'Away RaceLate', home: 'Home RaceLate',
+    favorite: 'away', spread: 3, total: 44, kickoff: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
+    status: 'open', finalHome: null, finalAway: null, order: 9002,
+  });
+  const safeJson = JSON.stringify(data).replace(/</g, '\\u003c');
+  const raceHtml = html.slice(0, m2.index) + m2[1] + safeJson + m2[3] + html.slice(m2.index + m2[0].length);
+  fs.writeFileSync('/tmp/test_race_full.html', raceHtml);
+
+  const browser2 = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
+  const page2 = await browser2.newPage();
+  page2.on('pageerror', err => console.log('PAGE EXCEPTION (stale-submit check):', err.message));
+  await page2.goto('file:///tmp/test_race_full.html');
+  await page2.waitForTimeout(300);
+
+  await page2.fill('form[data-action="signup"] input[name="username"]', 'raceuser');
+  await page2.fill('form[data-action="signup"] input[name="teamName"]', 'Race Test Team');
+  await page2.fill('form[data-action="signup"] input[name="firstName"]', 'Race');
+  await page2.fill('form[data-action="signup"] input[name="lastName"]', 'User');
+  await page2.fill('form[data-action="signup"] input[name="email"]', 'race@test.com');
+  await page2.fill('form[data-action="signup"] input[name="password"]', 'password1');
+  await page2.fill('form[data-action="signup"] input[name="confirmPassword"]', 'password1');
+  await page2.click('form[data-action="signup"] button[type="submit"]');
+  await page2.waitForTimeout(150);
+
+  function raceEarlyCard() {
+    return page2.locator('.game-card', { has: page2.locator('.tname', { hasText: 'Away RaceEarly' }) });
+  }
+  function raceLateCard() {
+    return page2.locator('.game-card', { has: page2.locator('.tname', { hasText: 'Away RaceLate' }) });
+  }
+
+  // Wager on RaceEarly (ATS only) while it's still open -- this becomes
+  // raceuser's earliest wagered game of the week.
+  let raceForm = raceEarlyCard().locator('form[data-action="save-picks"]');
+  await raceForm.locator('input[name="ats-pick"][value="home"]').check();
+  await raceForm.locator('input[name="ats-points"]').fill('20');
+  await raceForm.locator('button[type="submit"]').click();
+  await page2.waitForTimeout(150);
+
+  // Wager ATS only on RaceLate too, leaving its OU market open -- this is the
+  // form we'll try to (stale-)submit after RaceEarly's kickoff passes.
+  raceForm = raceLateCard().locator('form[data-action="save-picks"]');
+  await raceForm.locator('input[name="ats-pick"][value="away"]').check();
+  await raceForm.locator('input[name="ats-points"]').fill('15');
+  await raceForm.locator('button[type="submit"]').click();
+  await page2.waitForTimeout(150);
+
+  // Let real wall-clock time carry RaceEarly's kickoff into the past WITHOUT
+  // triggering any re-render (no clicks, no tab switches) -- exactly the
+  // stale-DOM scenario this guards against.
+  await page2.waitForTimeout(2800);
+
+  const staleOuForm = raceLateCard().locator('form[data-action="save-picks"]');
+  if (await staleOuForm.count() !== 1) throw new Error('FAIL: expected the stale RaceLate-game form to still be present in the DOM before submitting it');
+  await staleOuForm.locator('input[name="ou-pick"][value="over"]').check();
+  await staleOuForm.locator('input[name="ou-points"]').fill('10');
+  await staleOuForm.locator('button[type="submit"]').click();
+  await page2.waitForTimeout(200);
+
+  const toastText = await page2.locator('#toast-root .toast').last().innerText().catch(() => null);
+  console.log('Stale-submit toast text:', toastText);
+  if (!toastText || !/first game has kicked off already/i.test(toastText)) {
+    throw new Error('FAIL: expected a "first game has kicked off already" popup on stale submit, got: ' + toastText);
+  }
+
+  // And the OU wager must NOT have been saved -- re-render (tab switch) and
+  // confirm the game now shows as week-locked with no OU pick recorded.
+  await page2.click('button[data-action="set-tab"][data-tab="leaderboard"]');
+  await page2.waitForTimeout(100);
+  await page2.click('button[data-action="set-tab"][data-tab="week"]');
+  await page2.waitForTimeout(150);
+  const postRaceRecap = await raceLateCard().locator('.recap').innerText();
+  if (/Over 44/.test(postRaceRecap)) throw new Error('FAIL: the rejected stale OU submission should not have been saved, but it was: ' + postRaceRecap);
+
+  console.log('ALL STALE-SUBMIT TESTS PASSED (popup + rejected save)');
+  await browser2.close();
 })().catch(async (e) => { console.error('TEST FAILED:', e.message); process.exit(1); });
