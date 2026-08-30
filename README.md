@@ -41,13 +41,15 @@ how the app works, hand it to someone else, or rebuild it elsewhere.
   tends to get paraphrased or summarized. See its module docstring for the
   expected input shape.
 
-- **tests/** — a Playwright regression suite (21 files) covering: duplicate
-  pick prevention, the under-wagered compliance report, the email/mailto
-  composer, week-level pick locking (including a stale-page race where a
-  form rendered just before lock still tries to submit), hiding upcoming
-  weeks until their dates arrive, viewing another player's picks once a
-  game locks (but viewing your OWN picks always works, even before a game
-  starts), the collapsible admin games list, commissioner balance
+- **tests/** — a Playwright regression suite (25 files) covering: duplicate
+  pick prevention, the under-wagered compliance report (including its
+  Monday-8:30pm-ET freeze and the commissioner's manual "Update this week"
+  override), the email/mailto composer, week-level pick locking (including
+  a stale-page race where a form rendered just before lock still tries to
+  submit), hiding upcoming weeks until their dates arrive, viewing another
+  player's picks once a game locks (but viewing your OWN picks always
+  works, even before a game starts, with a week filter to browse pick
+  history), the collapsible admin games list, commissioner balance
   adjustments, hiding locked games from the This Week tab by default, the
   Rules tab (including its PIN gate), self-service password reset, the
   minimum-wager enforcement and a weekly wager budget (a player's combined
@@ -56,9 +58,10 @@ how the app works, hand it to someone else, or rebuild it elsewhere.
   the commissioner's view, and a placed-at timestamp on every pick), the
   collapsible (default-collapsed) Void a Pick list, booting a player's
   account (and their wagers), per-player paid/buy-back/pay-type tracking
-  (in the Boot a Player card), the void-picks player filter, the This Week
-  sport filter, and rejecting a duplicate team
-  name at signup.
+  (in the Boot a Player card), the leaderboard's total-wagered column and
+  week filter (a standings snapshot as of a past week) with CSV export,
+  the void-picks player filter, the This Week sport filter, and rejecting a
+  duplicate team name at signup.
   Each test drives a full in-memory copy of
   the app in a headless browser — none of them touch the live artifact.
   `tests/build_test_full.py` wraps `pool.html` in a minimal `<html>` shell

@@ -389,6 +389,51 @@ def main():
         'the download-roster-backup action handler',
     )
 
+    script = replace_once(
+        script,
+        "    } else if(action === 'download-leaderboard-csv'){\n"
+        "      if(!downloadsCap){ toast('Downloads aren\\'t available in this view.'); return; }\n"
+        "      var lb = leaderboardRows();\n"
+        "      var weekLabel = lb.activeWeek ? lb.weeks.filter(function(w){ return weekKey(w.sport, w.week) === lb.activeWeek; })[0] : null;\n"
+        "      var csvLines = [['Rank','Player','Wins','Losses','Pushes','Total Wagered','Balance'].map(csvField).join(',')];\n"
+        "      lb.rows.forEach(function(r, i){\n"
+        "        csvLines.push([i+1, displayName(r.key), r.stats.wins, r.stats.losses, r.stats.pushes, r.stats.totalWagered, r.stats.balance].map(csvField).join(','));\n"
+        "      });\n"
+        "      var csvText = csvLines.join('\\r\\n') + '\\r\\n';\n"
+        "      var stamp = new Date().toISOString().slice(0, 10);\n"
+        "      var safeName = (state.poolName || 'pool').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'pool';\n"
+        "      var weekSuffix = weekLabel ? '-' + (weekLabel.sport + '-' + weekLabel.week).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : '';\n"
+        "      downloadsCap.save({ filename: safeName + '-leaderboard' + weekSuffix + '-' + stamp + '.csv', data: csvText })\n"
+        "        .then(function(){ toast('Leaderboard CSV saved.'); })\n"
+        "        .catch(function(err){\n"
+        "          var code = err && err.code;\n"
+        "          if(code === 'declined') return;\n"
+        "          toast('Could not save the CSV file (' + (code || 'unknown error') + ').');\n"
+        "        });",
+        "    } else if(action === 'download-leaderboard-csv'){\n"
+        "      var lb = leaderboardRows();\n"
+        "      var weekLabel = lb.activeWeek ? lb.weeks.filter(function(w){ return weekKey(w.sport, w.week) === lb.activeWeek; })[0] : null;\n"
+        "      var csvLines = [['Rank','Player','Wins','Losses','Pushes','Total Wagered','Balance'].map(csvField).join(',')];\n"
+        "      lb.rows.forEach(function(r, i){\n"
+        "        csvLines.push([i+1, displayName(r.key), r.stats.wins, r.stats.losses, r.stats.pushes, r.stats.totalWagered, r.stats.balance].map(csvField).join(','));\n"
+        "      });\n"
+        "      var csvText = csvLines.join('\\r\\n') + '\\r\\n';\n"
+        "      var stamp = new Date().toISOString().slice(0, 10);\n"
+        "      var safeName = (state.poolName || 'pool').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'pool';\n"
+        "      var weekSuffix = weekLabel ? '-' + (weekLabel.sport + '-' + weekLabel.week).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : '';\n"
+        "      var blob = new Blob([csvText], { type: 'text/csv' });\n"
+        "      var blobUrl = URL.createObjectURL(blob);\n"
+        "      var a = document.createElement('a');\n"
+        "      a.href = blobUrl;\n"
+        "      a.download = safeName + '-leaderboard' + weekSuffix + '-' + stamp + '.csv';\n"
+        "      document.body.appendChild(a);\n"
+        "      a.click();\n"
+        "      a.remove();\n"
+        "      setTimeout(function(){ URL.revokeObjectURL(blobUrl); }, 1000);\n"
+        "      toast('Leaderboard CSV saved.');",
+        'the download-leaderboard-csv action handler',
+    )
+
     # --- Password reset: pool.html's version just checks the typed email
     # against the one on file, client-side, and lets the reset straight
     # through -- fine for the Artifact, which has no way to send real email.

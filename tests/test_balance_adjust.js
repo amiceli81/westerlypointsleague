@@ -32,7 +32,7 @@ const { chromium } = require('playwright');
     return tr ? Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim()) : null;
   });
   console.log('Baseline leaderboard row:', row);
-  if (!row || row[3] !== '1000') throw new Error('FAIL: expected starting balance 1000, got: ' + JSON.stringify(row));
+  if (!row || row[4] !== '1000') throw new Error('FAIL: expected starting balance 1000, got: ' + JSON.stringify(row));
 
   // --- Admin: apply a +250 bonus ---
   await page.click('button[data-action="set-tab"][data-tab="admin"]');
@@ -67,7 +67,7 @@ const { chromium } = require('playwright');
     return tr ? Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim()) : null;
   });
   console.log('After +250 adjustment:', row);
-  if (!row || row[3] !== '1250') throw new Error('FAIL: expected balance 1250 after +250 adjustment, got: ' + JSON.stringify(row));
+  if (!row || row[4] !== '1250') throw new Error('FAIL: expected balance 1250 after +250 adjustment, got: ' + JSON.stringify(row));
 
   // --- Apply a -400 penalty and confirm it nets out correctly ---
   await page.click('button[data-action="set-tab"][data-tab="admin"]');
@@ -86,7 +86,7 @@ const { chromium } = require('playwright');
     return tr ? Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim()) : null;
   });
   console.log('After -400 adjustment (net +250-400=850):', row);
-  if (!row || row[3] !== '850') throw new Error('FAIL: expected balance 850 after net adjustments, got: ' + JSON.stringify(row));
+  if (!row || row[4] !== '850') throw new Error('FAIL: expected balance 850 after net adjustments, got: ' + JSON.stringify(row));
 
   // --- Only the commissioner can do this -- log out of admin and confirm the form is gone ---
   await page.click('button[data-action="set-tab"][data-tab="admin"]');

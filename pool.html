@@ -1415,12 +1415,19 @@
   state.adjustments = state.adjustments || [];
   state.weekVisibility = state.weekVisibility || {};
   state.rulesText = state.rulesText || '';
+  // Anchors when the compliance report last unfroze -- see
+  // complianceReferenceTime(). Defaulting to now (rather than leaving it
+  // unset) means a pool that's never touched this feature stays live, same
+  // as before, until the very next Monday 8:30pm ET freeze point.
+  state.complianceUpdatedAt = state.complianceUpdatedAt || new Date().toISOString();
 
   var view = {
     tab: 'week',
     showCompleted: false,
     editingGameId: null,
     viewingPlayer: null,
+    playerPicksWeekFilter: '',
+    leaderboardWeekFilter: '',
     gamesListCollapsed: false,
     isCommissioner: false,
     readOnly: false,
@@ -1486,6 +1493,11 @@
     return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
       return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
     });
+  }
+
+  function csvField(v){
+    var s = String(v == null ? '' : v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
   }
 
   function fmtLine(n){
@@ -1558,9 +1570,10 @@
   }
 
   function playerStats(name){
-    var wins=0, losses=0, pushes=0, net=0, pending=0;
+    var wins=0, losses=0, pushes=0, net=0, pending=0, totalWagered=0;
     state.wagers.forEach(function(w){
       if(w.player !== name) return;
+      totalWagered += w.points;
       var g = gameById(w.gameId);
       var r = wagerResult(w, g);
       if(r === 'pending') pending += w.points;
@@ -1569,7 +1582,28 @@
       else if(r === 'push'){ pushes++; }
     });
     var adj = playerAdjustmentTotal(name);
-    return { wins:wins, losses:losses, pushes:pushes, net:net + adj, adjustments: adj, balance: state.startingBalance + net + adj, pending: pending };
+    return { wins:wins, losses:losses, pushes:pushes, net:net + adj, adjustments: adj, balance: state.startingBalance + net + adj, pending: pending, totalWagered: totalWagered };
+  }
+
+  function playerStatsThroughWeek(name, gameIds, cutoffMs){
+    // Same shape as playerStats(), but only counting wagers on games in
+    // gameIds (that week and every earlier one) and adjustments made at or
+    // before cutoffMs -- a snapshot of the leaderboard as it stood at the
+    // end of a past week, for the leaderboard's week filter.
+    var wins=0, losses=0, pushes=0, net=0, pending=0, totalWagered=0;
+    state.wagers.forEach(function(w){
+      if(w.player !== name || !gameIds[w.gameId]) return;
+      totalWagered += w.points;
+      var g = gameById(w.gameId);
+      var r = wagerResult(w, g);
+      if(r === 'pending') pending += w.points;
+      else if(r === 'win'){ wins++; net += w.points; }
+      else if(r === 'loss'){ losses++; net -= w.points; }
+      else if(r === 'push'){ pushes++; }
+    });
+    var adj = state.adjustments.filter(function(a){ return a.player === name && a.ts <= cutoffMs; })
+      .reduce(function(sum, a){ return sum + a.amount; }, 0);
+    return { wins:wins, losses:losses, pushes:pushes, net:net + adj, adjustments: adj, balance: state.startingBalance + net + adj, pending: pending, totalWagered: totalWagered };
   }
 
   function playerWager(gameId, player, type){
@@ -1587,7 +1621,70 @@
     return start;
   }
 
-  function currentWeekWindowForSport(sport){
+  // ---------- compliance report freeze (Monday 8:30pm ET) ----------
+  function nyOffsetMinutes(ms){
+    // The UTC offset (in minutes) America/New_York is observing at this
+    // instant -- EST (-300) or EDT (-240) -- read from the browser's own
+    // timezone database instead of hardcoding DST transition dates.
+    var dtf = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York', hourCycle: 'h23',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+    var parts = {};
+    dtf.formatToParts(new Date(ms)).forEach(function(p){ parts[p.type] = p.value; });
+    var asIfUTC = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+    return Math.round((asIfUTC - ms) / 60000);
+  }
+
+  function nextMondayEightThirtyET(afterMs){
+    // The next Monday 8:30:00 PM America/New_York time strictly after
+    // afterMs, as a real UTC epoch ms. Two-pass so a target date on the
+    // other side of a DST transition from afterMs still gets the right
+    // offset applied.
+    var dtf = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York', hourCycle: 'h23',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+    var parts = {};
+    dtf.formatToParts(new Date(afterMs)).forEach(function(p){ parts[p.type] = p.value; });
+    var y = +parts.year, mo = +parts.month, d = +parts.day, h = +parts.hour, mi = +parts.minute;
+    var weekday = new Date(Date.UTC(y, mo - 1, d)).getUTCDay(); // 0=Sun..6=Sat; date-only math, so timezone-safe
+    var daysAhead = (1 - weekday + 7) % 7;
+    var pastCutoffToday = weekday === 1 && (h > 20 || (h === 20 && mi >= 30));
+    if(daysAhead === 0 && pastCutoffToday) daysAhead = 7;
+    var targetDateOnly = new Date(Date.UTC(y, mo - 1, d));
+    targetDateOnly.setUTCDate(targetDateOnly.getUTCDate() + daysAhead);
+    var ty = targetDateOnly.getUTCFullYear(), tmo = targetDateOnly.getUTCMonth() + 1, td = targetDateOnly.getUTCDate();
+    function estimate(offsetMin){ return Date.UTC(ty, tmo - 1, td, 20, 30, 0) - offsetMin * 60000; }
+    var firstPass = estimate(nyOffsetMinutes(afterMs));
+    return estimate(nyOffsetMinutes(firstPass));
+  }
+
+  function complianceReferenceTime(){
+    // The compliance report tracks the live current week normally, UNTIL a
+    // Monday 8:30pm ET passes since it was last unfrozen (state.complianceUpdatedAt)
+    // -- at that point it freezes, pinned to whatever week was current AT
+    // THAT MOMENT, and stays there (never silently drifting to a later
+    // week) until the commissioner clicks "Update this week", which stamps
+    // a fresh complianceUpdatedAt and unfreezes it until the next Monday
+    // 8:30pm ET.
+    var lastUpdateMs = state.complianceUpdatedAt ? new Date(state.complianceUpdatedAt).getTime() : Date.now();
+    var freezePoint = nextMondayEightThirtyET(lastUpdateMs);
+    var now = Date.now();
+    if(now < freezePoint) return new Date(now);
+    // Once frozen, use a moment safely mid-day on that same Monday (ET)
+    // rather than 8:30pm exactly -- currentWeekWindowForSport()/
+    // tuesdayWindowStart() key off the viewer's OWN local calendar date, and
+    // 8:30pm ET already rolls into Tuesday in UTC (and points further east),
+    // which would silently identify the WRONG week for anyone not west of
+    // that boundary. Backing off several hours keeps the same calendar day
+    // for any viewer within a realistic range of ET.
+    return new Date(freezePoint - 8 * 60 * 60 * 1000);
+  }
+
+  function currentWeekWindowForSport(sport, asOf){
     // The "current week" for one sport is the Tuesday-Monday window
     // containing right now, among THAT sport's games. If none of that
     // sport's games fall in today's window (its season hasn't started yet,
@@ -1596,9 +1693,11 @@
     // per-sport (rather than one shared window) matters because NFL and
     // NCAAF seasons don't line up on the calendar -- e.g. NCAAF's current
     // week can be well underway while NFL hasn't kicked off its season yet.
+    // `asOf` lets a caller (the compliance report, once frozen) ask "as of
+    // THIS moment" instead of the true current time.
     var withKickoff = state.games.filter(function(g){ return g.sport === sport && g.kickoff; });
     if(!withKickoff.length) return null;
-    var now = new Date();
+    var now = asOf || new Date();
     var nowStart = tuesdayWindowStart(now);
     var nowEnd = new Date(nowStart.getTime() + 7*24*60*60*1000);
     var hasThisWeek = withKickoff.some(function(g){
@@ -1617,11 +1716,11 @@
 
   function weekKey(sport, week){ return sport + '|' + week; }
 
-  function autoWeekVisible(sport, week){
+  function autoWeekVisible(sport, week, asOf){
     // The original automatic rule (current week by kickoff date, per sport)
     // -- now used only as the DEFAULT for any sport+week the commissioner
     // hasn't explicitly overridden via the Week visibility tool.
-    var win = currentWeekWindowForSport(sport);
+    var win = currentWeekWindowForSport(sport, asOf);
     if(!win) return false;
     return state.games.some(function(g){
       if(g.sport !== sport || g.week !== week || !g.kickoff) return false;
@@ -1630,7 +1729,7 @@
     });
   }
 
-  function isWeekVisible(sport, week){
+  function isWeekVisible(sport, week, asOf){
     // Explicit true/false from the commissioner always wins; otherwise fall
     // back to the automatic current-week-by-date rule, so a week the
     // commissioner has never touched behaves exactly as it always has.
@@ -1638,7 +1737,7 @@
     if(Object.prototype.hasOwnProperty.call(state.weekVisibility, key)){
       return !!state.weekVisibility[key];
     }
-    return autoWeekVisible(sport, week);
+    return autoWeekVisible(sport, week, asOf);
   }
 
   function allSportWeeks(){
@@ -1657,13 +1756,33 @@
     });
   }
 
+  function gameIdsThroughWeek(sport, week){
+    // Every game (any sport) that falls at or before the END of the given
+    // (sport, week)'s own Tuesday-Monday window -- i.e. that week and every
+    // earlier one, combined across sports by actual calendar time. Used for
+    // the leaderboard's week filter: a "standings as of week X" snapshot.
+    var target = allSportWeeks().filter(function(w){ return w.sport === sport && w.week === week; })[0];
+    var ids = {};
+    if(!target) return ids;
+    var cutoff = tuesdayWindowStart(new Date(target.earliest)).getTime() + 7*24*60*60*1000;
+    state.games.forEach(function(g){
+      if(g.kickoff && new Date(g.kickoff).getTime() < cutoff) ids[g.id] = true;
+    });
+    return { ids: ids, cutoffMs: cutoff };
+  }
+
   function currentWeekGames(){
     // Every game whose sport+week is currently "visible" per isWeekVisible()
     // -- the commissioner's manual override if one was set for that
     // sport+week, else the automatic current-week-by-date rule. This is the
-    // single definition of "this week" shared by the This Week tab and the
-    // compliance report, so toggling a week's visibility moves both together.
+    // definition of "this week" used by the This Week tab; the compliance
+    // report uses currentWeekGamesAsOf() instead, which can be pinned to an
+    // earlier moment while frozen (see complianceReferenceTime()).
     return state.games.filter(function(g){ return g.kickoff && isWeekVisible(g.sport, g.week); });
+  }
+
+  function currentWeekGamesAsOf(asOf){
+    return state.games.filter(function(g){ return g.kickoff && isWeekVisible(g.sport, g.week, asOf); });
   }
 
   function currentWeekLabel(games){
@@ -1734,8 +1853,9 @@
     // week's games (ATS + O/U combined, any sport) falls short of half the
     // balance they had STARTING this week -- not their current balance,
     // which this week's own (still-pending, or just-settled) results
-    // shouldn't be allowed to move the bar on.
-    var games = currentWeekGames();
+    // shouldn't be allowed to move the bar on. Which week counts as "this
+    // week" here can be frozen -- see complianceReferenceTime().
+    var games = currentWeekGamesAsOf(complianceReferenceTime());
     var gameIds = {};
     games.forEach(function(g){ gameIds[g.id] = true; });
     var weekStart = null;
@@ -1798,16 +1918,23 @@
   }
 
   function renderComplianceCard(){
-    var games = currentWeekGames();
+    var asOf = complianceReferenceTime();
+    var isFrozen = asOf.getTime() < Date.now();
+    var games = currentWeekGamesAsOf(asOf);
     var label = currentWeekLabel(games);
     var rows = halfPointsReport();
-    var head = '<div class="section-title"><h3>Under-wagered this week</h3></div>';
+    var head = '<div class="section-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3>Under-wagered this week</h3>' +
+      '<button type="button" class="btn ghost" data-action="update-compliance-week">Update this week</button>' +
+      '</div>';
+    var freezeNote = isFrozen
+      ? '<p class="eyebrow" style="margin:-6px 0 12px">Frozen as of ' + esc(fmtDate(asOf.toISOString())) + ' (Monday 8:30pm ET) -- won\'t advance to a new week until the commissioner clicks Update this week.</p>'
+      : '';
     if(!label){
-      return '<div class="card">' + head + '<div class="empty" style="border:none">No games are scheduled yet, so there\'s no current week to check.</div></div>';
+      return '<div class="card">' + head + freezeNote + '<div class="empty" style="border:none">No games are scheduled yet, so there\'s no current week to check.</div></div>';
     }
     var sub = '<p class="eyebrow" style="margin:-6px 0 12px">Current week: ' + esc(label) + ' &middot; flags anyone whose total points wagered across this week\'s games is under half the balance they had starting this week</p>';
     if(!rows.length){
-      return '<div class="card">' + head + sub + '<div class="empty" style="border:none">Everyone has wagered at least half their points this week.</div></div>';
+      return '<div class="card">' + head + freezeNote + sub + '<div class="empty" style="border:none">Everyone has wagered at least half their points this week.</div></div>';
     }
     // halfPointsReport() itself always returns most-short-first -- re-sort
     // here so the Status column header can flip the direction without
@@ -1820,7 +1947,7 @@
     }).join('');
     var sortArrow = view.complianceSortAsc ? '▲' : '▼';
     var statusHeader = '<th class="num"><button type="button" class="sortable-th" data-action="toggle-compliance-sort">Status ' + sortArrow + '</button></th>';
-    return '<div class="card">' + head + sub + '<div class="table-wrap"><table class="board"><thead><tr><th>Team</th><th class="num">Week-start balance</th><th class="num">Half</th><th class="num">Wagered</th>' + statusHeader + '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
+    return '<div class="card">' + head + freezeNote + sub + '<div class="table-wrap"><table class="board"><thead><tr><th>Team</th><th class="num">Week-start balance</th><th class="num">Half</th><th class="num">Wagered</th>' + statusHeader + '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
   }
 
   function renderBalanceAdjustCard(){
@@ -2321,22 +2448,46 @@
     return '<div class="card game-card">' + head + matchup + body + '</div>';
   }
 
-  function renderLeaderboardTab(){
+  function leaderboardRows(){
+    // Shared by the on-screen table and the CSV export, so what you export
+    // always matches what you're looking at -- including the week filter.
     var keys = rosterUsernames();
-    if(!keys.length){
+    var weeks = allSportWeeks();
+    var activeWeek = weeks.some(function(w){ return weekKey(w.sport, w.week) === view.leaderboardWeekFilter; }) ? view.leaderboardWeekFilter : '';
+    var through = null;
+    if(activeWeek){
+      var target = weeks.filter(function(w){ return weekKey(w.sport, w.week) === activeWeek; })[0];
+      through = gameIdsThroughWeek(target.sport, target.week);
+    }
+    var rows = keys.map(function(k){
+      return { key: k, stats: through ? playerStatsThroughWeek(k, through.ids, through.cutoffMs) : playerStats(k) };
+    });
+    rows.sort(function(a,b){ return b.stats.balance - a.stats.balance; });
+    return { keys: keys, weeks: weeks, activeWeek: activeWeek, rows: rows };
+  }
+
+  function renderLeaderboardTab(){
+    var lb = leaderboardRows();
+    if(!lb.keys.length){
       return '<div class="empty">No one\'s on the board yet. Once players make picks (or the commissioner adds them), standings show up here.</div>';
     }
-    var rows = keys.map(function(k){ return { key:k, stats: playerStats(k) }; });
-    rows.sort(function(a,b){ return b.stats.balance - a.stats.balance; });
-    var body = rows.map(function(r, i){
+    var weekOptions = lb.weeks.slice().reverse().map(function(w){
+      var k = weekKey(w.sport, w.week);
+      return '<option value="' + esc(k) + '" ' + (lb.activeWeek === k ? 'selected' : '') + '>' + esc(w.sport + ' — ' + w.week) + '</option>';
+    }).join('');
+    var toolbar = '<div class="toolbar">' +
+      (lb.weeks.length ? '<div class="field" style="max-width:280px;margin:0"><label>Standings as of</label><select data-action="filter-leaderboard-week"><option value="">Current (all weeks)</option>' + weekOptions + '</select></div>' : '<span></span>') +
+      '<button type="button" class="btn ghost" data-action="download-leaderboard-csv">Export as CSV</button>' +
+      '</div>';
+    var body = lb.rows.map(function(r, i){
       var d = r.stats.balance - state.startingBalance;
       var nameCell = '<button type="button" class="player-link" data-action="view-player" data-player="' + esc(r.key) + '">' + esc(displayName(r.key)) + '</button>' + (r.key===currentPlayer?' <span class="eyebrow">(you)</span>':'');
-      return '<tr><td class="rank ' + (i===0?'top':'') + '">' + (i+1) + '</td><td>' + nameCell + '</td><td class="num mono">' + r.stats.wins + '-' + r.stats.losses + '-' + r.stats.pushes + '</td><td class="num mono" style="color:' + (d>0?'var(--win)':d<0?'var(--loss)':'var(--text)') + '">' + r.stats.balance + '</td></tr>';
+      return '<tr><td class="rank ' + (i===0?'top':'') + '">' + (i+1) + '</td><td>' + nameCell + '</td><td class="num mono">' + r.stats.wins + '-' + r.stats.losses + '-' + r.stats.pushes + '</td><td class="num mono">' + r.stats.totalWagered + '</td><td class="num mono" style="color:' + (d>0?'var(--win)':d<0?'var(--loss)':'var(--text)') + '">' + r.stats.balance + '</td></tr>';
     }).join('');
-    var html = '<div class="card"><div class="table-wrap"><table class="board"><thead><tr><th>#</th><th>Player</th><th class="num">W-L-P</th><th class="num">Balance</th></tr></thead><tbody>' + body + '</tbody></table></div></div>' +
+    var html = '<div class="card">' + toolbar + '<div class="table-wrap"><table class="board"><thead><tr><th>#</th><th>Player</th><th class="num">W-L-P</th><th class="num">Total wagered</th><th class="num">Balance</th></tr></thead><tbody>' + body + '</tbody></table></div></div>' +
       '<div class="eyebrow" style="text-align:center">Everyone starts at ' + state.startingBalance + ' pts</div>' +
       '<p class="eyebrow" style="text-align:center">Click a player\'s name to see picks on games that have kicked off</p>';
-    if(view.viewingPlayer && keys.indexOf(view.viewingPlayer) !== -1){
+    if(view.viewingPlayer && lb.keys.indexOf(view.viewingPlayer) !== -1){
       html += renderPlayerPicksCard(view.viewingPlayer);
     }
     return html;
@@ -2360,20 +2511,48 @@
     if(!wagers.length){
       return '<div class="card">' + head + '<div class="empty" style="border:none">' + (isOwnPicks ? 'No picks placed yet.' : 'No picks yet on games that have started.') + '</div></div>';
     }
-    wagers = wagers.slice().sort(function(a,b){
+    // Every distinct week this player has a VISIBLE pick in, most recent
+    // first -- lets the commissioner (or the player themself) pick history
+    // apart week by week instead of one long combined list.
+    var weekGroups = {};
+    wagers.forEach(function(w){
+      var g = gameById(w.gameId);
+      if(!g) return;
+      var key = weekKey(g.sport, g.week);
+      if(!weekGroups[key]) weekGroups[key] = { sport: g.sport, week: g.week, earliest: g.kickoff };
+      else if(new Date(g.kickoff) < new Date(weekGroups[key].earliest)) weekGroups[key].earliest = g.kickoff;
+    });
+    var weekList = Object.keys(weekGroups).map(function(k){ return weekGroups[k]; })
+      .sort(function(a,b){ return new Date(b.earliest) - new Date(a.earliest); });
+    var activeWeekKey = weekList.some(function(w){ return weekKey(w.sport, w.week) === view.playerPicksWeekFilter; }) ? view.playerPicksWeekFilter : '';
+    var weekFilter = '';
+    if(weekList.length > 1){
+      var weekOptions = weekList.map(function(w){
+        var k = weekKey(w.sport, w.week);
+        return '<option value="' + esc(k) + '" ' + (activeWeekKey === k ? 'selected' : '') + '>' + esc(w.sport + ' — ' + w.week) + '</option>';
+      }).join('');
+      weekFilter = '<div class="field" style="max-width:280px;margin-bottom:12px"><label>Week</label><select data-action="filter-player-picks-week"><option value="">All weeks</option>' + weekOptions + '</select></div>';
+    }
+    var visibleWagers = activeWeekKey
+      ? wagers.filter(function(w){ var g = gameById(w.gameId); return g && weekKey(g.sport, g.week) === activeWeekKey; })
+      : wagers;
+    if(!visibleWagers.length){
+      return '<div class="card">' + head + weekFilter + '<div class="empty" style="border:none">No picks for this week.</div></div>';
+    }
+    visibleWagers = visibleWagers.slice().sort(function(a,b){
       var ga = gameById(a.gameId), gb = gameById(b.gameId);
       var ka = ga && ga.kickoff ? new Date(ga.kickoff).getTime() : 0;
       var kb = gb && gb.kickoff ? new Date(gb.kickoff).getTime() : 0;
       return kb - ka;
     });
-    var rows = wagers.map(function(w){
+    var rows = visibleWagers.map(function(w){
       var g = gameById(w.gameId);
       var res = wagerResult(w, g);
       var pickLabel = w.type === 'ATS' ? (w.pick==='home'?g.home:g.away) : (w.pick==='over'?'Over':'Under') + ' ' + fmtNum(g.total);
       var matchup = '<div>' + esc(g.away) + ' @ ' + esc(g.home) + '</div><div class="eyebrow" style="margin-top:2px">' + esc(g.sport) + ' · ' + esc(g.week) + '</div>';
       return '<tr><td>' + matchup + '</td><td class="eyebrow">' + w.type + '</td><td>' + esc(pickLabel) + '</td><td class="num mono">' + w.points + '</td><td class="eyebrow">' + esc(fmtDate(w.placedAt)) + '</td><td class="num"><span class="result-pill ' + res + '">' + res + '</span></td></tr>';
     }).join('');
-    return '<div class="card">' + head + '<div class="table-wrap"><table class="board"><thead><tr><th>Game</th><th>Type</th><th>Pick</th><th class="num">Pts</th><th>Placed</th><th class="num">Result</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+    return '<div class="card">' + head + weekFilter + '<div class="table-wrap"><table class="board"><thead><tr><th>Game</th><th>Type</th><th>Pick</th><th class="num">Pts</th><th>Placed</th><th class="num">Result</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
   }
 
   function renderPicksTab(){
@@ -2563,6 +2742,10 @@
     } else if(action === 'toggle-compliance-sort'){
       view.complianceSortAsc = !view.complianceSortAsc;
       render();
+    } else if(action === 'update-compliance-week'){
+      if(!view.isCommissioner) return;
+      state.complianceUpdatedAt = new Date().toISOString();
+      save('Under-wagered report updated to the current week.');
     } else if(action === 'edit-game'){
       view.editingGameId = el.getAttribute('data-game');
       render();
@@ -2573,11 +2756,13 @@
       render();
     } else if(action === 'view-player'){
       view.viewingPlayer = el.getAttribute('data-player');
+      view.playerPicksWeekFilter = '';
       render();
       var pc = document.querySelector('[data-action="close-player-picks"]');
       if(pc) pc.closest('.card').scrollIntoView({behavior:'smooth', block:'start'});
     } else if(action === 'close-player-picks'){
       view.viewingPlayer = null;
+      view.playerPicksWeekFilter = '';
       render();
     } else if(action === 'toggle-games-list'){
       view.gamesListCollapsed = !view.gamesListCollapsed;
@@ -2595,6 +2780,25 @@
       else if(vValue === 'hide') state.weekVisibility[vKey] = false;
       else delete state.weekVisibility[vKey];
       save('Updated visibility for ' + vSport + ' — ' + vWeek + '.');
+    } else if(action === 'download-leaderboard-csv'){
+      if(!downloadsCap){ toast('Downloads aren\'t available in this view.'); return; }
+      var lb = leaderboardRows();
+      var weekLabel = lb.activeWeek ? lb.weeks.filter(function(w){ return weekKey(w.sport, w.week) === lb.activeWeek; })[0] : null;
+      var csvLines = [['Rank','Player','Wins','Losses','Pushes','Total Wagered','Balance'].map(csvField).join(',')];
+      lb.rows.forEach(function(r, i){
+        csvLines.push([i+1, displayName(r.key), r.stats.wins, r.stats.losses, r.stats.pushes, r.stats.totalWagered, r.stats.balance].map(csvField).join(','));
+      });
+      var csvText = csvLines.join('\r\n') + '\r\n';
+      var stamp = new Date().toISOString().slice(0, 10);
+      var safeName = (state.poolName || 'pool').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'pool';
+      var weekSuffix = weekLabel ? '-' + (weekLabel.sport + '-' + weekLabel.week).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') : '';
+      downloadsCap.save({ filename: safeName + '-leaderboard' + weekSuffix + '-' + stamp + '.csv', data: csvText })
+        .then(function(){ toast('Leaderboard CSV saved.'); })
+        .catch(function(err){
+          var code = err && err.code;
+          if(code === 'declined') return;
+          toast('Could not save the CSV file (' + (code || 'unknown error') + ').');
+        });
     } else if(action === 'download-roster-backup'){
       if(!view.isCommissioner) return;
       if(!downloadsCap){ toast('Downloads aren\'t available in this view.'); return; }
@@ -2668,6 +2872,12 @@
     var action = el.getAttribute('data-action');
     if(action === 'filter-void-player'){
       view.voidPickFilter = el.value;
+      render();
+    } else if(action === 'filter-player-picks-week'){
+      view.playerPicksWeekFilter = el.value;
+      render();
+    } else if(action === 'filter-leaderboard-week'){
+      view.leaderboardWeekFilter = el.value;
       render();
     }
   });
