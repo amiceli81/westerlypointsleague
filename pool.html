@@ -1,0 +1,2601 @@
+<title>The Westerly Points League</title>
+<style id="app-style">
+
+  :root{
+    --bg:#F3EEE1; --surface:#FFFFFF; --surface-2:#ECE5D3;
+    --text:#211B14; --text-dim:#6B6154;
+    --accent:#B8792C; --accent-strong:#8F5D1F; --accent-ink:#FFFFFF;
+    --line:#DCD3BC;
+    --win:#2F7D52; --loss:#B23A2E; --push:#5B7083;
+    --win-bg:#E4F0E8; --loss-bg:#F5E2DF; --push-bg:#E7EBEE;
+    --shadow: 0 1px 2px rgba(33,27,20,.06), 0 8px 20px -12px rgba(33,27,20,.18);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#10161F; --surface:#172230; --surface-2:#1D2B3A;
+      --text:#F1ECE0; --text-dim:#8FA3B5;
+      --accent:#E3A857; --accent-strong:#F0BE7C; --accent-ink:#1B140A;
+      --line:#2A3A4A;
+      --win:#4C9A6A; --loss:#D9584A; --push:#7C93A8;
+      --win-bg:#16261E; --loss-bg:#2B1B18; --push-bg:#1B2530;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 24px -14px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#10161F; --surface:#172230; --surface-2:#1D2B3A;
+    --text:#F1ECE0; --text-dim:#8FA3B5;
+    --accent:#E3A857; --accent-strong:#F0BE7C; --accent-ink:#1B140A;
+    --line:#2A3A4A;
+    --win:#4C9A6A; --loss:#D9584A; --push:#7C93A8;
+    --win-bg:#16261E; --loss-bg:#2B1B18; --push-bg:#1B2530;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 24px -14px rgba(0,0,0,.6);
+  }
+
+  *,*::before,*::after{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:Arial,Helvetica,sans-serif;
+    line-height:1.45; -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,.display{
+    font-family:Arial,Helvetica,sans-serif; font-weight:700;
+    letter-spacing:.01em; text-wrap:balance; margin:0;
+  }
+  .mono{ font-family:Arial,Helvetica,sans-serif; font-variant-numeric:tabular-nums; }
+  .eyebrow{ font-family:Arial,Helvetica,sans-serif; font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; color:var(--text-dim); }
+  a{ color:var(--accent-strong); }
+  button{ font-family:inherit; }
+  button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible{
+    outline:2px solid var(--accent); outline-offset:2px;
+  }
+
+  #toast-root{ position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:999; display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none; }
+  .toast{ background:var(--text); color:var(--bg); font-size:.85rem; padding:9px 16px; border-radius:7px; box-shadow:var(--shadow); max-width:88vw; }
+
+  .app-shell{ max-width:1180px; margin:0 auto; padding:0 16px 64px; }
+
+  header.top{ position:sticky; top:0; z-index:10; background:var(--bg); border-bottom:1px solid var(--line); padding:14px 16px 0; }
+  header.top .row{ max-width:1180px; margin:0 auto; display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap; padding-bottom:12px; }
+  .pool-title{ font-size:2.1rem; line-height:1; }
+  .pool-title small{ display:block; font-family:Arial,Helvetica,sans-serif; font-size:.62rem; letter-spacing:.14em; text-transform:uppercase; color:var(--text-dim); margin-bottom:2px; }
+  .who-chip{ display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:7px 12px; box-shadow:var(--shadow); }
+  .who-chip .name{ font-weight:600; font-size:.88rem; }
+  .who-chip .bal{ font-size:1.05rem; font-weight:600; }
+  button.linklike{ font-size:.7rem; color:var(--text-dim); background:none; border:none; text-decoration:underline; cursor:pointer; padding:0; }
+  button.player-link{ font:inherit; color:var(--accent-strong); background:none; border:none; text-decoration:underline; text-underline-offset:2px; cursor:pointer; padding:0; }
+  button.player-link:hover{ color:var(--accent); }
+
+  nav.tabs{ max-width:1180px; margin:0 auto; display:flex; gap:4px; overflow-x:auto; }
+  nav.tabs button{
+    background:none; border:none; border-bottom:3px solid transparent; color:var(--text-dim);
+    font-family:Arial,Helvetica,sans-serif; font-size:.78rem; letter-spacing:.08em; text-transform:uppercase;
+    padding:10px 14px 9px; cursor:pointer; white-space:nowrap;
+  }
+  nav.tabs button.active{ color:var(--text); border-bottom-color:var(--accent); font-weight:600; }
+  nav.tabs button:hover:not(.active){ color:var(--text); }
+
+  .readonly-banner{ background:var(--push-bg); color:var(--push); border-bottom:1px solid var(--line); font-size:.82rem; padding:8px 16px; text-align:center; }
+
+  .layout{ display:grid; grid-template-columns:240px 1fr; gap:24px; align-items:start; padding-top:22px; }
+  @media (max-width:820px){
+    .layout{ grid-template-columns:1fr; }
+    .layout main{ order:1; }
+    .layout aside.sidebar{ order:2; }
+  }
+  aside.sidebar{ position:sticky; top:78px; display:flex; flex-direction:column; gap:0; }
+  .board-head{ padding:14px 16px; border-bottom:1px dashed var(--line); background:var(--surface-2); }
+  .board-head h3{ font-size:1.1rem; }
+  .board-post{ padding:12px 16px; border-bottom:1px solid var(--line); display:flex; flex-direction:column; gap:5px; }
+  .board-post:last-child{ border-bottom:none; }
+  .board-post .msg{ font-size:.87rem; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .board-post .meta{ display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .board-empty{ padding:16px; text-align:center; color:var(--text-dim); font-size:.85rem; }
+  .board-post-form{ padding:12px 16px; border-bottom:1px dashed var(--line); display:flex; flex-direction:column; gap:8px; }
+  .board-post-form textarea{ padding:8px 10px; border:1px solid var(--line); border-radius:7px; background:var(--bg); color:var(--text); font-size:.85rem; font-family:inherit; resize:vertical; min-height:64px; }
+  main{ padding-top:0; display:flex; flex-direction:column; gap:22px; }
+  .empty{ border:1px dashed var(--line); border-radius:10px; padding:32px 20px; text-align:center; color:var(--text-dim); }
+  .empty a.btn{ margin-top:10px; }
+
+  .week-head{ display:flex; align-items:baseline; gap:10px; margin:6px 0 -6px; }
+  .week-head h2{ font-size:1.4rem; }
+
+  .toolbar{ display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  label.toggle{ display:flex; align-items:center; gap:7px; font-size:.8rem; color:var(--text-dim); cursor:pointer; }
+
+  .card{ background:var(--surface); border:1px solid var(--line); border-radius:9px; box-shadow:var(--shadow); overflow:hidden; }
+
+  .game-card .g-head{ display:flex; justify-content:space-between; align-items:center; padding:11px 16px; border-bottom:1px dashed var(--line); background:var(--surface-2); }
+  .game-card .g-head .lines{ display:flex; gap:8px; }
+  .chip{ font-family:Arial,Helvetica,sans-serif; font-size:.72rem; padding:3px 8px; border-radius:5px; border:1px solid var(--line); color:var(--text-dim); }
+  .status-badge{ font-family:Arial,Helvetica,sans-serif; font-size:.66rem; letter-spacing:.08em; text-transform:uppercase; padding:3px 9px; border-radius:20px; border:1px solid var(--accent); color:var(--accent-strong); }
+  .status-badge.final{ border-color:var(--line); color:var(--text-dim); background:var(--surface); }
+
+  .matchup{ padding:14px 16px 6px; display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+  .team{ flex:1; min-width:140px; }
+  .team .tname{ font-size:1.7rem; line-height:1; }
+  .team .tline{ font-size:.82rem; color:var(--text-dim); margin-top:1px; }
+  .team .tscore{ font-size:1.7rem; }
+  .vs{ align-self:center; color:var(--text-dim); font-family:Arial,Helvetica,sans-serif; font-size:.75rem; }
+
+  .pick-form{ padding:12px 16px 16px; display:flex; flex-direction:column; gap:14px; }
+  .pick-block{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; }
+  .pick-block .label{ font-family:Arial,Helvetica,sans-serif; font-size:.68rem; letter-spacing:.1em; text-transform:uppercase; color:var(--text-dim); width:52px; }
+  .opt{ display:flex; align-items:center; gap:5px; border:1px solid var(--line); border-radius:6px; padding:6px 10px; cursor:pointer; font-size:.85rem; }
+  .opt input{ margin:0; accent-color:var(--accent); }
+  .opt.checked{ border-color:var(--accent); background:var(--surface-2); }
+  .pts-input{ width:76px; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--text); font-family:Arial,Helvetica,sans-serif; }
+  .pick-actions{ display:flex; justify-content:flex-end; gap:8px; }
+
+  .recap{ padding:12px 16px 16px; display:flex; flex-direction:column; gap:6px; font-size:.86rem; }
+  .recap-row{ display:flex; justify-content:space-between; gap:10px; }
+  .result-pill{ font-family:Arial,Helvetica,sans-serif; font-size:.68rem; letter-spacing:.08em; text-transform:uppercase; padding:2px 8px; border-radius:20px; }
+  .result-pill.win{ background:var(--win-bg); color:var(--win); }
+  .result-pill.loss{ background:var(--loss-bg); color:var(--loss); }
+  .result-pill.push{ background:var(--push-bg); color:var(--push); }
+  .result-pill.pending{ background:var(--surface-2); color:var(--text-dim); }
+
+  button.btn{ background:var(--accent); color:var(--accent-ink); border:none; border-radius:7px; padding:9px 16px; font-weight:600; font-size:.85rem; cursor:pointer; }
+  button.btn:hover{ background:var(--accent-strong); }
+  button.btn.ghost{ background:none; color:var(--text-dim); border:1px solid var(--line); }
+  button.btn.ghost:hover{ color:var(--text); border-color:var(--text-dim); }
+  button.btn.danger{ background:none; color:var(--loss); border:1px solid var(--loss); }
+  button.btn:disabled{ opacity:.5; cursor:not-allowed; }
+
+  table.board{ width:100%; border-collapse:collapse; font-size:.88rem; }
+  table.board th{ text-align:left; font-family:Arial,Helvetica,sans-serif; font-size:.66rem; letter-spacing:.08em; text-transform:uppercase; color:var(--text-dim); padding:9px 14px; border-bottom:1px solid var(--line); }
+  table.board td{ padding:10px 14px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  table.board tr:last-child td{ border-bottom:none; }
+  table.board td.num, table.board th.num{ font-family:Arial,Helvetica,sans-serif; text-align:right; }
+  .rank{ color:var(--text-dim); }
+  .rank.top{ color:var(--accent-strong); font-weight:700; }
+  .table-wrap{ overflow-x:auto; }
+
+  .auth-tabs{ display:flex; border-bottom:1px solid var(--line); }
+  .auth-tabs button{ flex:1; background:none; border:none; padding:12px; font-family:Arial,Helvetica,sans-serif; font-size:.75rem; letter-spacing:.08em; text-transform:uppercase; color:var(--text-dim); cursor:pointer; border-bottom:3px solid transparent; }
+  .auth-tabs button.active{ color:var(--text); border-bottom-color:var(--accent); font-weight:600; }
+  .hint{ font-size:.78rem; color:var(--text-dim); line-height:1.4; margin:0; }
+
+  form.panel{ display:flex; flex-direction:column; gap:12px; padding:16px; }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .grid3{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+  @media (max-width:560px){ .grid2,.grid3{ grid-template-columns:1fr; } }
+  .field{ display:flex; flex-direction:column; gap:5px; }
+  .field label{ font-size:.72rem; color:var(--text-dim); font-family:Arial,Helvetica,sans-serif; letter-spacing:.06em; text-transform:uppercase; }
+  .field input, .field select{ padding:9px 10px; border:1px solid var(--line); border-radius:7px; background:var(--bg); color:var(--text); font-size:.88rem; }
+  .field textarea{ padding:9px 10px; border:1px solid var(--line); border-radius:7px; background:var(--bg); color:var(--text); font-size:.88rem; font-family:inherit; resize:vertical; }
+  .rules-textarea{ width:100%; min-height:420px; padding:14px 16px; border:1px solid var(--line); border-radius:9px; background:var(--bg); color:var(--text); font-size:.92rem; font-family:inherit; line-height:1.55; resize:vertical; box-sizing:border-box; }
+  .rules-text{ padding:16px; white-space:pre-wrap; line-height:1.6; font-size:.92rem; }
+  .section-title{ padding:14px 16px 0; }
+  .section-title h3{ font-size:1.15rem; }
+  hr.rule{ border:none; border-top:1px dashed var(--line); margin:0; }
+  .admin-game-row{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 16px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .admin-game-row:last-child{ border-bottom:none; }
+  .admin-game-row .meta{ font-size:.82rem; color:var(--text-dim); }
+  .inline-settle{ display:flex; align-items:center; gap:6px; }
+  .inline-settle input{ width:52px; padding:5px 6px; border:1px solid var(--line); border-radius:5px; background:var(--bg); color:var(--text); font-family:Arial,Helvetica,sans-serif; }
+  .pin-gate{ padding:32px 16px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:12px; }
+  .pin-gate input{ text-align:center; letter-spacing:.3em; font-size:1.1rem; width:140px; }
+  footer.note{ text-align:center; color:var(--text-dim); font-size:.76rem; padding:10px 0 30px; }
+</style>
+<div id="toast-root"></div>
+<div id="app">Loading the board…</div>
+<script id="state-data" type="application/json">{
+  "poolName": "The Westerly Points League",
+  "startingBalance": 1000,
+  "commissionerPin": "1234",
+  "players": [],
+  "games": [
+    {
+      "extId": "8c94552d022acec4a0458d70c19d3da9",
+      "sport": "NFL",
+      "week": "Week 1",
+      "away": "New England Patriots",
+      "home": "Seattle Seahawks",
+      "favorite": "home",
+      "spread": 3.5,
+      "total": 44.5,
+      "kickoff": "2026-09-10T00:15:00Z",
+      "id": "sync-8c94552d022acec4a0458d70c19d3da9",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 0
+    },
+    {
+      "extId": "acc580d74344ea3b31bbcdd057fe6a9c",
+      "sport": "NFL",
+      "week": "Week 1",
+      "away": "San Francisco 49ers",
+      "home": "Los Angeles Rams",
+      "favorite": "home",
+      "spread": 3.5,
+      "total": 48.5,
+      "kickoff": "2026-09-11T00:35:00Z",
+      "id": "sync-acc580d74344ea3b31bbcdd057fe6a9c",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 1
+    },
+    {
+      "extId": "95c01d1bb797d6df14824b106c5a9130",
+      "sport": "NFL",
+      "week": "Week 1",
+      "away": "Atlanta Falcons",
+      "home": "Pittsburgh Steelers",
+      "favorite": "home",
+      "spread": 3.0,
+      "total": 41.5,
+      "kickoff": "2026-09-13T17:00:00Z",
+      "id": "sync-95c01d1bb797d6df14824b106c5a9130",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 2
+    },
+    {
+      "extId": "b6cfdcbafa61ce220ba87dc2d9b80c77",
+      "sport": "NFL",
+      "week": "Week 1",
+      "away": "Baltimore Ravens",
+      "home": "Indianapolis Colts",
+      "favorite": "away",
+      "spread": 3.5,
+      "total": 48.5,
+      "kickoff": "2026-09-13T17:00:00Z",
+      "id": "sync-b6cfdcbafa61ce220ba87dc2d9b80c77",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 3
+    },
+    {
+      "extId": "7e09efed7e12c659b82740b67ce2f9a1",
+      "sport": "NFL",
+      "week": "Week 1",
+      "away": "Buffalo Bills",
+      "home": "Houston Texans",
+      "favorite": "away",
+      "spread": 1.5,
+      "total": 44.5,
+      "kickoff": "2026-09-13T17:00:00Z",
+      "id": "sync-7e09efed7e12c659b82740b67ce2f9a1",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 4
+    },
+    {
+      "extId": "fc362aff0d889ec52d358307a70c32ed",
+      "sport": "NFL",
+      "week": "Week 1",
+      "away": "Chicago Bears",
+      "home": "Carolina Panthers",
+      "favorite": "away",
+      "spread": 2.5,
+      "total": 47.5,
+      "kickoff": "2026-09-13T17:00:00Z",
+      "id": "sync-fc362aff0d889ec52d358307a70c32ed",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 5
+    },
+    {
+      "extId": "ed6d24ff979f9c71979fead577b0b3f7",
+      "sport": "NFL",
+      "week": "Week 1",
+      "away": "Tampa Bay Buccaneers",
+      "home": "Cincinnati Bengals",
+      "favorite": "home",
+      "spread": 3.5,
+      "total": 50.5,
+      "kickoff": "2026-09-13T17:00:00Z",
+      "id": "sync-ed6d24ff979f9c71979fead577b0b3f7",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 6
+    },
+    {
+      "extId": "e55c6fe19fce094ce214c8b0e5b504e9",
+      "sport": "NFL",
+      "week": "Week 1",
+      "away": "Cleveland Browns",
+      "home": "Jacksonville Jaguars",
+      "favorite": "home",
+      "spread": 7.5,
+      "total": 40.5,
+      "kickoff": "2026-09-13T17:00:00Z",
+      "id": "sync-e55c6fe19fce094ce214c8b0e5b504e9",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 7
+    },
+    {
+      "extId": "c1d3fcec25aaeb06ebd2244d33d338e0",
+      "sport": "NFL",
+      "week": "Week 1",
+      "away": "New Orleans Saints",
+      "home": "Detroit Lions",
+      "favorite": "home",
+      "spread": 7.0,
+      "total": 48.5,
+      "kickoff": "2026-09-13T17:00:00Z",
+      "id": "sync-c1d3fcec25aaeb06ebd2244d33d338e0",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 8
+    },
+    {
+      "extId": "7dddb296a42e7a41a774b24bd1709ce1",
+      "sport": "NFL",
+      "week": "Week 1",
+      "away": "New York Jets",
+      "home": "Tennessee Titans",
+      "favorite": "home",
+      "spread": 2.5,
+      "total": 39.5,
+      "kickoff": "2026-09-13T17:00:00Z",
+      "id": "sync-7dddb296a42e7a41a774b24bd1709ce1",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 9
+    },
+    {
+      "extId": "1edfa5ceaa1ad2cb57df1c1b908731f6",
+      "sport": "NFL",
+      "week": "Week 1",
+      "away": "Arizona Cardinals",
+      "home": "Los Angeles Chargers",
+      "favorite": "home",
+      "spread": 10.5,
+      "total": 46.5,
+      "kickoff": "2026-09-13T20:25:00Z",
+      "id": "sync-1edfa5ceaa1ad2cb57df1c1b908731f6",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 10
+    },
+    {
+      "extId": "cb77efed7e711d25a72c1a2a0a1af119",
+      "sport": "NFL",
+      "week": "Week 1",
+      "away": "Green Bay Packers",
+      "home": "Minnesota Vikings",
+      "favorite": "home",
+      "spread": 1.5,
+      "total": 45.5,
+      "kickoff": "2026-09-13T20:25:00Z",
+      "id": "sync-cb77efed7e711d25a72c1a2a0a1af119",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 11
+    },
+    {
+      "extId": "c5d95f48a16849ab6bebc68fbbfcb74a",
+      "sport": "NFL",
+      "week": "Week 1",
+      "away": "Miami Dolphins",
+      "home": "Las Vegas Raiders",
+      "favorite": "home",
+      "spread": 3.5,
+      "total": 40.5,
+      "kickoff": "2026-09-13T20:25:00Z",
+      "id": "sync-c5d95f48a16849ab6bebc68fbbfcb74a",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 12
+    },
+    {
+      "extId": "17885cb8dcade8f6c3bce14b2de805e8",
+      "sport": "NFL",
+      "week": "Week 1",
+      "away": "Washington Commanders",
+      "home": "Philadelphia Eagles",
+      "favorite": "home",
+      "spread": 4.5,
+      "total": 45.5,
+      "kickoff": "2026-09-13T20:25:00Z",
+      "id": "sync-17885cb8dcade8f6c3bce14b2de805e8",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 13
+    },
+    {
+      "extId": "3e646c7479c57f5d9752d8c7dfe7059b",
+      "sport": "NFL",
+      "week": "Week 1",
+      "away": "Dallas Cowboys",
+      "home": "New York Giants",
+      "favorite": "away",
+      "spread": 2.5,
+      "total": 48.5,
+      "kickoff": "2026-09-14T00:20:00Z",
+      "id": "sync-3e646c7479c57f5d9752d8c7dfe7059b",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 14
+    },
+    {
+      "extId": "5ad8135dc2b5f27de0b777acd317855a",
+      "sport": "NFL",
+      "week": "Week 1",
+      "away": "Denver Broncos",
+      "home": "Kansas City Chiefs",
+      "favorite": "home",
+      "spread": 3.0,
+      "total": 42.5,
+      "kickoff": "2026-09-15T00:15:00Z",
+      "id": "sync-5ad8135dc2b5f27de0b777acd317855a",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 15
+    },
+    {
+      "extId": "56e8897681915f7ec92baeee952bb1ae",
+      "sport": "NFL",
+      "week": "Week 2",
+      "away": "Detroit Lions",
+      "home": "Buffalo Bills",
+      "favorite": "home",
+      "spread": 3.0,
+      "total": 52.5,
+      "kickoff": "2026-09-18T00:15:00Z",
+      "id": "sync-56e8897681915f7ec92baeee952bb1ae",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 16
+    },
+    {
+      "extId": "aee7eae1849ebb103b9bf233e9741392",
+      "sport": "NFL",
+      "week": "Week 2",
+      "away": "Carolina Panthers",
+      "home": "Atlanta Falcons",
+      "favorite": "home",
+      "spread": 1.5,
+      "total": 44.5,
+      "kickoff": "2026-09-20T17:00:00Z",
+      "id": "sync-aee7eae1849ebb103b9bf233e9741392",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 17
+    },
+    {
+      "extId": "2143ade9684fd876b68a4e8cbf451f05",
+      "sport": "NFL",
+      "week": "Week 2",
+      "away": "New Orleans Saints",
+      "home": "Baltimore Ravens",
+      "favorite": "home",
+      "spread": 7.5,
+      "total": 46.5,
+      "kickoff": "2026-09-20T17:00:00Z",
+      "id": "sync-2143ade9684fd876b68a4e8cbf451f05",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 18
+    },
+    {
+      "extId": "0283a29e1b38ef78b29b904fd56a16dd",
+      "sport": "NFL",
+      "week": "Week 2",
+      "away": "Minnesota Vikings",
+      "home": "Chicago Bears",
+      "favorite": "home",
+      "spread": 3.5,
+      "total": 45.5,
+      "kickoff": "2026-09-20T17:00:00Z",
+      "id": "sync-0283a29e1b38ef78b29b904fd56a16dd",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 19
+    },
+    {
+      "extId": "36ad2fa722f4915ef23d2c81351261de",
+      "sport": "NFL",
+      "week": "Week 2",
+      "away": "Cincinnati Bengals",
+      "home": "Houston Texans",
+      "favorite": "home",
+      "spread": 2.5,
+      "total": 46.5,
+      "kickoff": "2026-09-20T17:00:00Z",
+      "id": "sync-36ad2fa722f4915ef23d2c81351261de",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 20
+    },
+    {
+      "extId": "0636ebff776d43f8c829a36713c80b22",
+      "sport": "NFL",
+      "week": "Week 2",
+      "away": "Cleveland Browns",
+      "home": "Tampa Bay Buccaneers",
+      "favorite": "home",
+      "spread": 5.5,
+      "total": 42.5,
+      "kickoff": "2026-09-20T17:00:00Z",
+      "id": "sync-0636ebff776d43f8c829a36713c80b22",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 21
+    },
+    {
+      "extId": "4aeee070bb6ec60bdfae4dede61b9014",
+      "sport": "NFL",
+      "week": "Week 2",
+      "away": "Green Bay Packers",
+      "home": "New York Jets",
+      "favorite": "away",
+      "spread": 5.5,
+      "total": 42.5,
+      "kickoff": "2026-09-20T17:00:00Z",
+      "id": "sync-4aeee070bb6ec60bdfae4dede61b9014",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 22
+    },
+    {
+      "extId": "9d14f87600f6edc74dbcb5c74edf6246",
+      "sport": "NFL",
+      "week": "Week 2",
+      "away": "Pittsburgh Steelers",
+      "home": "New England Patriots",
+      "favorite": "home",
+      "spread": 4.5,
+      "total": 43.5,
+      "kickoff": "2026-09-20T17:00:00Z",
+      "id": "sync-9d14f87600f6edc74dbcb5c74edf6246",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 23
+    },
+    {
+      "extId": "fafc649c455e32a0f2ba1bd06e2039bc",
+      "sport": "NFL",
+      "week": "Week 2",
+      "away": "Philadelphia Eagles",
+      "home": "Tennessee Titans",
+      "favorite": "away",
+      "spread": 4.5,
+      "total": 42.5,
+      "kickoff": "2026-09-20T17:00:00Z",
+      "id": "sync-fafc649c455e32a0f2ba1bd06e2039bc",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 24
+    },
+    {
+      "extId": "1fd6628c781f556a7a19638e97d7107f",
+      "sport": "NFL",
+      "week": "Week 2",
+      "away": "Jacksonville Jaguars",
+      "home": "Denver Broncos",
+      "favorite": "home",
+      "spread": 2.5,
+      "total": 43.5,
+      "kickoff": "2026-09-20T20:05:00Z",
+      "id": "sync-1fd6628c781f556a7a19638e97d7107f",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 25
+    },
+    {
+      "extId": "71b3b83747589efdc5baef2c5cf811bf",
+      "sport": "NFL",
+      "week": "Week 2",
+      "away": "Las Vegas Raiders",
+      "home": "Los Angeles Chargers",
+      "favorite": "home",
+      "spread": 8.5,
+      "total": 42.5,
+      "kickoff": "2026-09-20T20:05:00Z",
+      "id": "sync-71b3b83747589efdc5baef2c5cf811bf",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 26
+    },
+    {
+      "extId": "4dd8020192a544385db42374e5555303",
+      "sport": "NFL",
+      "week": "Week 2",
+      "away": "Seattle Seahawks",
+      "home": "Arizona Cardinals",
+      "favorite": "away",
+      "spread": 10.0,
+      "total": 44.5,
+      "kickoff": "2026-09-20T20:25:00Z",
+      "id": "sync-4dd8020192a544385db42374e5555303",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 27
+    },
+    {
+      "extId": "85ef85098ddd22fe4ecf45e7e3c0a9c0",
+      "sport": "NFL",
+      "week": "Week 2",
+      "away": "Washington Commanders",
+      "home": "Dallas Cowboys",
+      "favorite": "home",
+      "spread": 4.5,
+      "total": 51.5,
+      "kickoff": "2026-09-20T20:25:00Z",
+      "id": "sync-85ef85098ddd22fe4ecf45e7e3c0a9c0",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 28
+    },
+    {
+      "extId": "68bc55903f50af4af4766adcc89fcc61",
+      "sport": "NFL",
+      "week": "Week 2",
+      "away": "Miami Dolphins",
+      "home": "San Francisco 49ers",
+      "favorite": "home",
+      "spread": 10.5,
+      "total": 46.5,
+      "kickoff": "2026-09-20T20:25:00Z",
+      "id": "sync-68bc55903f50af4af4766adcc89fcc61",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 29
+    },
+    {
+      "extId": "3313dcc5e91f9a2dda995a5e36e55f52",
+      "sport": "NCAAF",
+      "week": "Week 1",
+      "away": "San Jose State Spartans",
+      "home": "USC Trojans",
+      "favorite": "home",
+      "spread": 39.5,
+      "total": 52.5,
+      "kickoff": "2026-08-29T19:00",
+      "id": "sync-3313dcc5e91f9a2dda995a5e36e55f52",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 30
+    },
+    {
+      "extId": "123a238486098cc9e8f71fea0cf4e7b0",
+      "sport": "NCAAF",
+      "week": "Week 1",
+      "away": "NC State Wolfpack",
+      "home": "Virginia Cavaliers",
+      "favorite": "home",
+      "spread": 14.5,
+      "total": 47.5,
+      "kickoff": "2026-08-29T19:45",
+      "id": "sync-123a238486098cc9e8f71fea0cf4e7b0",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 31
+    },
+    {
+      "extId": "9bbc04340f2b3f77756a22bc44e1a4a4",
+      "sport": "NCAAF",
+      "week": "Week 1",
+      "away": "New Mexico State Aggies",
+      "home": "Florida State Seminoles",
+      "favorite": "home",
+      "spread": 31.5,
+      "total": 53.5,
+      "kickoff": "2026-08-29T23:00:00Z",
+      "id": "sync-9bbc04340f2b3f77756a22bc44e1a4a4",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 32
+    },
+    {
+      "extId": "24941bb5e2e6f79d944530b0b8ea4be5",
+      "sport": "NCAAF",
+      "week": "Week 1",
+      "away": "Hawaii Rainbow Warriors",
+      "home": "Stanford Cardinal",
+      "favorite": "home",
+      "spread": 4.5,
+      "total": 48.5,
+      "kickoff": "2026-08-29T23:00:00Z",
+      "id": "sync-24941bb5e2e6f79d944530b0b8ea4be5",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 33
+    },
+    {
+      "extId": "e564afb0a5ab84ab43befa56bdb90522",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "UMass Minutemen",
+      "home": "Rutgers Scarlet Knights",
+      "favorite": "home",
+      "spread": 29.5,
+      "total": 53.5,
+      "kickoff": "2026-09-03T22:00:00Z",
+      "id": "sync-e564afb0a5ab84ab43befa56bdb90522",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 34
+    },
+    {
+      "extId": "f089e3d943a34a9c4fe1808568b96529",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Akron Zips",
+      "home": "Wake Forest Demon Deacons",
+      "favorite": "home",
+      "spread": 24.0,
+      "total": 48.5,
+      "kickoff": "2026-09-03T23:00:00Z",
+      "id": "sync-f089e3d943a34a9c4fe1808568b96529",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 35
+    },
+    {
+      "extId": "d9f49d1967af91e2aade42979e8c65c8",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Bethune-Cookman Wildcats",
+      "home": "UCF Knights",
+      "favorite": "home",
+      "spread": 42.5,
+      "total": 59.5,
+      "kickoff": "2026-09-03T23:00:00Z",
+      "id": "sync-d9f49d1967af91e2aade42979e8c65c8",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 36
+    },
+    {
+      "extId": "64cf9eedef7f4c7a764860a59f3c4329",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Arkansas Pine Bluff Golden Lions",
+      "home": "Missouri Tigers",
+      "favorite": "home",
+      "spread": 53.5,
+      "total": 62.5,
+      "kickoff": "2026-09-04T00:00:00Z",
+      "id": "sync-64cf9eedef7f4c7a764860a59f3c4329",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 37
+    },
+    {
+      "extId": "1d6daad1c93bf7e5ae16be1db12e27d5",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Colorado Buffaloes",
+      "home": "Georgia Tech Yellow Jackets",
+      "favorite": "home",
+      "spread": 6.5,
+      "total": 50.5,
+      "kickoff": "2026-09-04T00:00:00Z",
+      "id": "sync-1d6daad1c93bf7e5ae16be1db12e27d5",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 38
+    },
+    {
+      "extId": "e746bf44bc7bb95a7686770723882d70",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Eastern Illinois Panthers",
+      "home": "Minnesota Golden Gophers",
+      "favorite": "home",
+      "spread": 42.5,
+      "total": 51.5,
+      "kickoff": "2026-09-04T00:00:00Z",
+      "id": "sync-e746bf44bc7bb95a7686770723882d70",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 39
+    },
+    {
+      "extId": "86e3c86de584357bb263fa4ae819ed30",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Idaho Vandals",
+      "home": "Utah Utes",
+      "favorite": "home",
+      "spread": 33.5,
+      "total": 56.5,
+      "kickoff": "2026-09-04T01:00:00Z",
+      "id": "sync-86e3c86de584357bb263fa4ae819ed30",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 40
+    },
+    {
+      "extId": "1697069330d0343bdf7930ac0b0c3863",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "UAB Blazers",
+      "home": "Illinois Fighting Illini",
+      "favorite": "home",
+      "spread": 28.5,
+      "total": 55.5,
+      "kickoff": "2026-09-04T01:00:00Z",
+      "id": "sync-1697069330d0343bdf7930ac0b0c3863",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 41
+    },
+    {
+      "extId": "c424c1d6579f60f93c37698cc82f2ceb",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Indiana State Sycamores",
+      "home": "Purdue Boilermakers",
+      "favorite": "home",
+      "spread": 35.5,
+      "total": 56.5,
+      "kickoff": "2026-09-04T23:00:00Z",
+      "id": "sync-c424c1d6579f60f93c37698cc82f2ceb",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 42
+    },
+    {
+      "extId": "604ae01f960f7be32aeb554f733be590",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "LIU Sharks",
+      "home": "Kansas Jayhawks",
+      "favorite": "home",
+      "spread": 38.5,
+      "total": 53.5,
+      "kickoff": "2026-09-05T00:00:00Z",
+      "id": "sync-604ae01f960f7be32aeb554f733be590",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 43
+    },
+    {
+      "extId": "05c2e060c97c538faeee8237a0bd60f0",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Toledo Rockets",
+      "home": "Michigan State Spartans",
+      "favorite": "home",
+      "spread": 10.0,
+      "total": 49.5,
+      "kickoff": "2026-09-05T00:00:00Z",
+      "id": "sync-05c2e060c97c538faeee8237a0bd60f0",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 44
+    },
+    {
+      "extId": "7356f9bad07c48fc6b78f52e38c85c11",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "UTEP Miners",
+      "home": "Oklahoma Sooners",
+      "favorite": "home",
+      "spread": 41.5,
+      "total": 50.5,
+      "kickoff": "2026-09-05T00:00:00Z",
+      "id": "sync-7356f9bad07c48fc6b78f52e38c85c11",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 45
+    },
+    {
+      "extId": "5f92cc707afed4249e1e935dbbeacb5e",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Miami Hurricanes",
+      "home": "Stanford Cardinal",
+      "favorite": "away",
+      "spread": 24.5,
+      "total": 48.5,
+      "kickoff": "2026-09-05T01:00:00Z",
+      "id": "sync-5f92cc707afed4249e1e935dbbeacb5e",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 46
+    },
+    {
+      "extId": "b10ebab18213ecdc575885bfa874b98d",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "East Carolina Pirates",
+      "home": "Alabama Crimson Tide",
+      "favorite": "home",
+      "spread": 28.5,
+      "total": 53.5,
+      "kickoff": "2026-09-05T16:00:00Z",
+      "id": "sync-b10ebab18213ecdc575885bfa874b98d",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 47
+    },
+    {
+      "extId": "185883640e8f90f283915ddadb0230a3",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Coastal Carolina Chanticleers",
+      "home": "West Virginia Mountaineers",
+      "favorite": "home",
+      "spread": 21.5,
+      "total": 56.5,
+      "kickoff": "2026-09-05T16:00:00Z",
+      "id": "sync-185883640e8f90f283915ddadb0230a3",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 48
+    },
+    {
+      "extId": "4289d82f1cd4747962ff68c9098c6dcc",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Oregon State Beavers",
+      "home": "Houston Cougars",
+      "favorite": "home",
+      "spread": 20.5,
+      "total": 51.5,
+      "kickoff": "2026-09-05T16:00:00Z",
+      "id": "sync-4289d82f1cd4747962ff68c9098c6dcc",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 49
+    },
+    {
+      "extId": "e599d006aed0025ea9182d6763be6fd7",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "North Texas Mean Green",
+      "home": "Indiana Hoosiers",
+      "favorite": "home",
+      "spread": 40.5,
+      "total": 55.5,
+      "kickoff": "2026-09-05T16:00:00Z",
+      "id": "sync-e599d006aed0025ea9182d6763be6fd7",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 50
+    },
+    {
+      "extId": "ab601e833e1494159df16e0331dd02d4",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Miami (OH) RedHawks",
+      "home": "Pittsburgh Panthers",
+      "favorite": "home",
+      "spread": 16.5,
+      "total": 49.5,
+      "kickoff": "2026-09-05T16:00:00Z",
+      "id": "sync-ab601e833e1494159df16e0331dd02d4",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 51
+    },
+    {
+      "extId": "0b8f9bbc0bf1b04a819f0113922998b0",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Ohio Bobcats",
+      "home": "Nebraska Cornhuskers",
+      "favorite": "home",
+      "spread": 23.5,
+      "total": 47.5,
+      "kickoff": "2026-09-05T16:00:00Z",
+      "id": "sync-0b8f9bbc0bf1b04a819f0113922998b0",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 52
+    },
+    {
+      "extId": "f7c217b83839dba1c4df08e372851916",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "New Hampshire Wildcats",
+      "home": "Syracuse Orange",
+      "favorite": "home",
+      "spread": 32.5,
+      "total": 55.5,
+      "kickoff": "2026-09-05T16:00:00Z",
+      "id": "sync-f7c217b83839dba1c4df08e372851916",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 53
+    },
+    {
+      "extId": "9bb89639201454f186964f5b86365760",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Ball State Cardinals",
+      "home": "Ohio State Buckeyes",
+      "favorite": "home",
+      "spread": 50.5,
+      "total": 56.5,
+      "kickoff": "2026-09-05T16:30:00Z",
+      "id": "sync-9bb89639201454f186964f5b86365760",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 54
+    },
+    {
+      "extId": "994c7280c9e8dcb041c260eb2c767d4d",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Kent State Golden Flashes",
+      "home": "South Carolina Gamecocks",
+      "favorite": "home",
+      "spread": 36.5,
+      "total": 53.5,
+      "kickoff": "2026-09-05T16:45:00Z",
+      "id": "sync-994c7280c9e8dcb041c260eb2c767d4d",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 55
+    },
+    {
+      "extId": "6ba4c2cb4e23d19069d00b47716c95c9",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Youngstown St Penguins",
+      "home": "Kentucky Wildcats",
+      "favorite": "home",
+      "spread": 23.5,
+      "total": 62.5,
+      "kickoff": "2026-09-05T17:00:00Z",
+      "id": "sync-6ba4c2cb4e23d19069d00b47716c95c9",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 56
+    },
+    {
+      "extId": "6a210786327aaa1d1d7565f7b119f094",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Tennessee State Tigers",
+      "home": "Georgia Bulldogs",
+      "favorite": "home",
+      "spread": 47.5,
+      "total": 55.5,
+      "kickoff": "2026-09-05T19:00:00Z",
+      "id": "sync-6a210786327aaa1d1d7565f7b119f094",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 57
+    },
+    {
+      "extId": "525909f6be5e505d076a97eb097528eb",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Baylor Bears",
+      "home": "Auburn Tigers",
+      "favorite": "home",
+      "spread": 7.0,
+      "total": 59.5,
+      "kickoff": "2026-09-05T19:30:00Z",
+      "id": "sync-525909f6be5e505d076a97eb097528eb",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 58
+    },
+    {
+      "extId": "ac175733be9ad7061abab75fe080d18a",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Boise State Broncos",
+      "home": "Oregon Ducks",
+      "favorite": "home",
+      "spread": 24.5,
+      "total": 51.5,
+      "kickoff": "2026-09-05T19:30:00Z",
+      "id": "sync-ac175733be9ad7061abab75fe080d18a",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 59
+    },
+    {
+      "extId": "9e750af965ce9f276f4280686d4dba35",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Boston College Eagles",
+      "home": "Cincinnati Bearcats",
+      "favorite": "home",
+      "spread": 7.5,
+      "total": 51.5,
+      "kickoff": "2026-09-05T19:30:00Z",
+      "id": "sync-9e750af965ce9f276f4280686d4dba35",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 60
+    },
+    {
+      "extId": "8154373235ce2adf76b37ecd334601fc",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Tulane Green Wave",
+      "home": "Duke Blue Devils",
+      "favorite": "home",
+      "spread": 9.5,
+      "total": 50.5,
+      "kickoff": "2026-09-05T19:30:00Z",
+      "id": "sync-8154373235ce2adf76b37ecd334601fc",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 61
+    },
+    {
+      "extId": "c87470467f02dc3279d33b69db9bae63",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Furman Paladins",
+      "home": "Tennessee Volunteers",
+      "favorite": "home",
+      "spread": 46.5,
+      "total": 66.5,
+      "kickoff": "2026-09-05T19:30:00Z",
+      "id": "sync-c87470467f02dc3279d33b69db9bae63",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 62
+    },
+    {
+      "extId": "3b70c72dad6ee188202de37cf3218811",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Marshall Thundering Herd",
+      "home": "Penn State Nittany Lions",
+      "favorite": "home",
+      "spread": 24.5,
+      "total": 54.5,
+      "kickoff": "2026-09-05T19:30:00Z",
+      "id": "sync-3b70c72dad6ee188202de37cf3218811",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 63
+    },
+    {
+      "extId": "932e0ced2b1a1ae5694574642bb186ae",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Texas State Bobcats",
+      "home": "Texas Longhorns",
+      "favorite": "home",
+      "spread": 30.5,
+      "total": 59.5,
+      "kickoff": "2026-09-05T19:30:00Z",
+      "id": "sync-932e0ced2b1a1ae5694574642bb186ae",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 64
+    },
+    {
+      "extId": "2da3627714934ad966d548980bb69658",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Oklahoma State Cowboys",
+      "home": "Tulsa Golden Hurricane",
+      "favorite": "away",
+      "spread": 14.0,
+      "total": 60.5,
+      "kickoff": "2026-09-05T19:45:00Z",
+      "id": "sync-2da3627714934ad966d548980bb69658",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 65
+    },
+    {
+      "extId": "244ad71a1e9f6afa8001cc674aec1558",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "North Alabama Lions",
+      "home": "Arkansas Razorbacks",
+      "favorite": "home",
+      "spread": 40.5,
+      "total": 63.5,
+      "kickoff": "2026-09-05T20:15:00Z",
+      "id": "sync-244ad71a1e9f6afa8001cc674aec1558",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 66
+    },
+    {
+      "extId": "261e6183f68405cd431bbdbd0c31eefa",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Northern Illinois Huskies",
+      "home": "Iowa Hawkeyes",
+      "favorite": "home",
+      "spread": 31.5,
+      "total": 45.5,
+      "kickoff": "2026-09-05T20:15:00Z",
+      "id": "sync-261e6183f68405cd431bbdbd0c31eefa",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 67
+    },
+    {
+      "extId": "d7c91dabe6e413cca1b7d0d6d8dc7a15",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Austin Peay Governors",
+      "home": "Vanderbilt Commodores",
+      "favorite": "home",
+      "spread": 30.5,
+      "total": 61.5,
+      "kickoff": "2026-09-05T23:00:00Z",
+      "id": "sync-d7c91dabe6e413cca1b7d0d6d8dc7a15",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 68
+    },
+    {
+      "extId": "b4077e17d5393758cd18778ca067bd0a",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Nicholls State Colonels",
+      "home": "Kansas State Wildcats",
+      "favorite": "home",
+      "spread": 40.5,
+      "total": 55.5,
+      "kickoff": "2026-09-05T23:00:00Z",
+      "id": "sync-b4077e17d5393758cd18778ca067bd0a",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 69
+    },
+    {
+      "extId": "965fa47588c773e6753d409fc1020dec",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Western Michigan Broncos",
+      "home": "Michigan Wolverines",
+      "favorite": "home",
+      "spread": 27.5,
+      "total": 47.5,
+      "kickoff": "2026-09-05T23:00:00Z",
+      "id": "sync-965fa47588c773e6753d409fc1020dec",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 70
+    },
+    {
+      "extId": "19db717a66097e6d3fb887ae8cf3aaae",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Missouri State Bears",
+      "home": "Texas A&M Aggies",
+      "favorite": "home",
+      "spread": 41.5,
+      "total": 52.5,
+      "kickoff": "2026-09-05T23:00:00Z",
+      "id": "sync-19db717a66097e6d3fb887ae8cf3aaae",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 71
+    },
+    {
+      "extId": "073bba47dc105fcd66913e74f281ae96",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "Clemson Tigers",
+      "home": "LSU Tigers",
+      "favorite": "home",
+      "spread": 10.5,
+      "total": 51.5,
+      "kickoff": "2026-09-05T23:30:00Z",
+      "id": "sync-073bba47dc105fcd66913e74f281ae96",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 72
+    },
+    {
+      "extId": "61a35dab6017f6f7de74fab10707197c",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "UL Monroe Warhawks",
+      "home": "Mississippi State Bulldogs",
+      "favorite": "home",
+      "spread": 28.5,
+      "total": 56.5,
+      "kickoff": "2026-09-05T23:30:00Z",
+      "id": "sync-61a35dab6017f6f7de74fab10707197c",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 73
+    },
+    {
+      "extId": "516f500b559017bc6c6f127259da99f1",
+      "sport": "NCAAF",
+      "week": "Week 2",
+      "away": "VMI Keydets",
+      "home": "Virginia Tech Hokies",
+      "favorite": "home",
+      "spread": 50.5,
+      "total": 57.5,
+      "kickoff": "2026-09-05T23:30:00Z",
+      "id": "sync-516f500b559017bc6c6f127259da99f1",
+      "status": "open",
+      "finalHome": null,
+      "finalAway": null,
+      "order": 74
+    }
+  ],
+  "wagers": []
+}</script>
+<script>
+(function(){
+  "use strict";
+  var TITLE_TEXT = document.title;
+  var STYLE_TEXT = document.getElementById('app-style').textContent;
+  var SCRIPT_TEXT = document.currentScript.textContent;
+
+  var state = null;
+  try{ state = JSON.parse(document.getElementById('state-data').textContent); }catch(e){ state = null; }
+  if(!state || typeof state !== 'object'){
+    state = {poolName:"The Westerly Points League", startingBalance:1000, commissionerPin:"1234", players:[], games:[], wagers:[]};
+  }
+  state.players = state.players || [];
+  state.games = state.games || [];
+  state.wagers = state.wagers || [];
+  state.announcements = state.announcements || [];
+  state.adjustments = state.adjustments || [];
+  state.weekVisibility = state.weekVisibility || {};
+  state.rulesText = state.rulesText || '';
+
+  var view = {
+    tab: 'week',
+    showCompleted: false,
+    editingGameId: null,
+    viewingPlayer: null,
+    gamesListCollapsed: false,
+    isCommissioner: false,
+    readOnly: false,
+    capabilityChecked: false,
+    authMode: 'signup'
+  };
+
+  // Migrate pre-account rosters (plain name strings) out of state.players --
+  // those names have no password and can't log in under the new system.
+  // Their past wagers still display fine (displayName() falls back to the
+  // raw stored string for anything that isn't a real account).
+  state.players = (state.players || []).filter(function(p){ return p && typeof p === 'object'; });
+
+  try{ view.isCommissioner = localStorage.getItem('poolIsCommissioner') === 'yes'; }catch(e){}
+  var currentPlayer = null;
+  try{ currentPlayer = localStorage.getItem('poolUsername') || null; }catch(e){}
+  if(currentPlayer && !findPlayer(currentPlayer)){
+    currentPlayer = null;
+    try{ localStorage.removeItem('poolUsername'); }catch(e){}
+  }
+
+  var artifactCap = null;
+  var warnedNoCap = false;
+  var downloadsCap = null;
+
+  function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4); }
+
+  // ---------- accounts ----------
+  function normalizeUsername(u){ return String(u || '').trim().toLowerCase(); }
+  function findPlayer(username){
+    var key = normalizeUsername(username);
+    return state.players.filter(function(p){ return p.username === key; })[0] || null;
+  }
+  function displayName(key){
+    var p = findPlayer(key);
+    return p ? p.teamName : key;
+  }
+  function randomSaltHex(){
+    var arr = new Uint8Array(16);
+    crypto.getRandomValues(arr);
+    return Array.from(arr).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+  }
+  function sha256Hex(text){
+    var enc = new TextEncoder().encode(text);
+    return crypto.subtle.digest('SHA-256', enc).then(function(buf){
+      return Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+    });
+  }
+  function hashNewPassword(password){
+    var salt = randomSaltHex();
+    return sha256Hex(salt + ':' + password).then(function(hash){ return { salt: salt, hash: hash }; });
+  }
+  function verifyPassword(password, salt, expectedHash){
+    return sha256Hex(salt + ':' + password).then(function(hash){ return hash === expectedHash; });
+  }
+
+  function esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  function fmtLine(n){
+    if(n === 0) return 'PK';
+    var v = Math.round(n*10)/10;
+    return (v > 0 ? '+' : '') + (Number.isInteger(v) ? v.toFixed(1) : v);
+  }
+  function fmtNum(n){
+    var v = Math.round(n*10)/10;
+    return Number.isInteger(v) ? String(v) : String(v);
+  }
+  function fmtSigned(n){
+    return (n > 0 ? '+' : '') + n;
+  }
+  function toLocalInputValue(isoString){
+    // Converts an absolute instant (full ISO, e.g. from the odds sync) into
+    // the "YYYY-MM-DDTHH:MM" shape a <input type="datetime-local"> needs, in
+    // the viewer's own local time. A value with no timezone info (an admin's
+    // own past entry) round-trips through here unchanged since Date() then
+    // treats it as local time already.
+    if(!isoString) return '';
+    var d = new Date(isoString);
+    if(isNaN(d.getTime())) return '';
+    function pad(n){ return String(n).padStart(2,'0'); }
+    return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function fmtDate(isoString){
+    var d = new Date(isoString);
+    if(isNaN(d.getTime())) return '';
+    return d.toLocaleString(undefined, {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
+  }
+
+  // ---------- scoring ----------
+  function gameResult(game){
+    if(game.status !== 'final' || game.finalHome == null || game.finalAway == null) return null;
+    var favMargin = game.favorite === 'away' ? (game.finalAway - game.finalHome) : (game.finalHome - game.finalAway);
+    var atsSide;
+    if(favMargin > game.spread) atsSide = game.favorite;
+    else if(favMargin < game.spread) atsSide = (game.favorite === 'home') ? 'away' : 'home';
+    else atsSide = 'push';
+    var total = game.finalHome + game.finalAway;
+    var ouSide;
+    if(total > game.total) ouSide = 'over';
+    else if(total < game.total) ouSide = 'under';
+    else ouSide = 'push';
+    return { atsSide: atsSide, ouSide: ouSide };
+  }
+
+  function wagerResult(wager, game){
+    if(!game) return 'pending';
+    var gr = gameResult(game);
+    if(!gr) return 'pending';
+    var side = wager.type === 'ATS' ? gr.atsSide : gr.ouSide;
+    if(side === 'push') return 'push';
+    return wager.pick === side ? 'win' : 'loss';
+  }
+
+  function gameById(id){ return state.games.filter(function(g){ return g.id === id; })[0] || null; }
+
+  function rosterUsernames(){
+    var set = {};
+    state.players.forEach(function(p){ set[p.username] = true; });
+    state.wagers.forEach(function(w){ set[w.player] = true; });
+    return Object.keys(set).sort(function(a,b){ return displayName(a).localeCompare(displayName(b)); });
+  }
+
+  function playerAdjustmentTotal(name){
+    return state.adjustments.filter(function(a){ return a.player === name; })
+      .reduce(function(sum, a){ return sum + a.amount; }, 0);
+  }
+
+  function playerStats(name){
+    var wins=0, losses=0, pushes=0, net=0, pending=0;
+    state.wagers.forEach(function(w){
+      if(w.player !== name) return;
+      var g = gameById(w.gameId);
+      var r = wagerResult(w, g);
+      if(r === 'pending') pending += w.points;
+      else if(r === 'win'){ wins++; net += w.points; }
+      else if(r === 'loss'){ losses++; net -= w.points; }
+      else if(r === 'push'){ pushes++; }
+    });
+    var adj = playerAdjustmentTotal(name);
+    return { wins:wins, losses:losses, pushes:pushes, net:net + adj, adjustments: adj, balance: state.startingBalance + net + adj, pending: pending };
+  }
+
+  function playerWager(gameId, player, type){
+    return state.wagers.filter(function(w){ return w.gameId===gameId && w.player===player && w.type===type; })[0] || null;
+  }
+
+  // ---------- current-week wagering compliance ----------
+  function tuesdayWindowStart(d){
+    // Football weeks run Tuesday-through-Monday. Given any date, returns
+    // midnight (local time) on the Tuesday that starts its week.
+    var day = d.getDay(); // 0=Sun..6=Sat
+    var diff = (day - 2 + 7) % 7; // days since the most recent Tuesday
+    var start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - diff);
+    start.setHours(0,0,0,0);
+    return start;
+  }
+
+  function currentWeekWindowForSport(sport){
+    // The "current week" for one sport is the Tuesday-Monday window
+    // containing right now, among THAT sport's games. If none of that
+    // sport's games fall in today's window (its season hasn't started yet,
+    // it's a bye, or it's already over), fall back to the most recent PAST
+    // week only -- never an upcoming week that hasn't started. Keeping this
+    // per-sport (rather than one shared window) matters because NFL and
+    // NCAAF seasons don't line up on the calendar -- e.g. NCAAF's current
+    // week can be well underway while NFL hasn't kicked off its season yet.
+    var withKickoff = state.games.filter(function(g){ return g.sport === sport && g.kickoff; });
+    if(!withKickoff.length) return null;
+    var now = new Date();
+    var nowStart = tuesdayWindowStart(now);
+    var nowEnd = new Date(nowStart.getTime() + 7*24*60*60*1000);
+    var hasThisWeek = withKickoff.some(function(g){
+      var kt = new Date(g.kickoff);
+      return kt >= nowStart && kt < nowEnd;
+    });
+    if(hasThisWeek) return { start: nowStart, end: nowEnd };
+    var past = withKickoff.filter(function(g){ return new Date(g.kickoff) < nowStart; });
+    if(past.length){
+      var latest = past.reduce(function(a,b){ return new Date(a.kickoff) > new Date(b.kickoff) ? a : b; });
+      var s2 = tuesdayWindowStart(new Date(latest.kickoff));
+      return { start: s2, end: new Date(s2.getTime() + 7*24*60*60*1000) };
+    }
+    return null;
+  }
+
+  function weekKey(sport, week){ return sport + '|' + week; }
+
+  function autoWeekVisible(sport, week){
+    // The original automatic rule (current week by kickoff date, per sport)
+    // -- now used only as the DEFAULT for any sport+week the commissioner
+    // hasn't explicitly overridden via the Week visibility tool.
+    var win = currentWeekWindowForSport(sport);
+    if(!win) return false;
+    return state.games.some(function(g){
+      if(g.sport !== sport || g.week !== week || !g.kickoff) return false;
+      var kt = new Date(g.kickoff);
+      return kt >= win.start && kt < win.end;
+    });
+  }
+
+  function isWeekVisible(sport, week){
+    // Explicit true/false from the commissioner always wins; otherwise fall
+    // back to the automatic current-week-by-date rule, so a week the
+    // commissioner has never touched behaves exactly as it always has.
+    var key = weekKey(sport, week);
+    if(Object.prototype.hasOwnProperty.call(state.weekVisibility, key)){
+      return !!state.weekVisibility[key];
+    }
+    return autoWeekVisible(sport, week);
+  }
+
+  function allSportWeeks(){
+    // Every distinct (sport, week) pairing among games that have a kickoff
+    // (a week can't be placed on an auto/manual timeline without one),
+    // sorted by that group's earliest kickoff.
+    var groups = {};
+    state.games.forEach(function(g){
+      if(!g.sport || !g.week || !g.kickoff) return;
+      var key = weekKey(g.sport, g.week);
+      if(!groups[key]) groups[key] = { sport: g.sport, week: g.week, earliest: g.kickoff };
+      else if(new Date(g.kickoff) < new Date(groups[key].earliest)) groups[key].earliest = g.kickoff;
+    });
+    return Object.keys(groups).map(function(k){ return groups[k]; }).sort(function(a,b){
+      return new Date(a.earliest) - new Date(b.earliest);
+    });
+  }
+
+  function currentWeekGames(){
+    // Every game whose sport+week is currently "visible" per isWeekVisible()
+    // -- the commissioner's manual override if one was set for that
+    // sport+week, else the automatic current-week-by-date rule. This is the
+    // single definition of "this week" shared by the This Week tab and the
+    // compliance report, so toggling a week's visibility moves both together.
+    return state.games.filter(function(g){ return g.kickoff && isWeekVisible(g.sport, g.week); });
+  }
+
+  function currentWeekLabel(games){
+    var labels = {};
+    games.forEach(function(g){ labels[g.sport + ' — ' + g.week] = true; });
+    var keys = Object.keys(labels).sort();
+    return keys.length ? keys.join(' / ') : null;
+  }
+
+  function startOfWeekBalance(name, weekStart, gameIds){
+    // The balance a player had the moment this week's games began -- i.e.
+    // their running balance BEFORE any of this week's results (or, since
+    // they haven't happened yet in the normal case, before this week could
+    // have affected it at all). Built the same way playerStats() builds the
+    // current balance, but wagers on this week's own games are excluded
+    // entirely (win, loss, or still pending -- none of them happened yet as
+    // of the start of the week), and commissioner adjustments made during
+    // the week itself don't count toward it either.
+    var net = 0;
+    state.wagers.forEach(function(w){
+      if(w.player !== name || gameIds[w.gameId]) return;
+      var g = gameById(w.gameId);
+      var r = wagerResult(w, g);
+      if(r === 'win') net += w.points;
+      else if(r === 'loss') net -= w.points;
+    });
+    var adj = 0;
+    state.adjustments.forEach(function(a){
+      if(a.player !== name) return;
+      if(weekStart && a.ts >= weekStart.getTime()) return;
+      adj += a.amount;
+    });
+    return state.startingBalance + net + adj;
+  }
+
+  function halfPointsReport(){
+    // Flags every roster member whose TOTAL points wagered across this
+    // week's games (ATS + O/U combined, any sport) falls short of half the
+    // balance they had STARTING this week -- not their current balance,
+    // which this week's own (still-pending, or just-settled) results
+    // shouldn't be allowed to move the bar on.
+    var games = currentWeekGames();
+    var gameIds = {};
+    games.forEach(function(g){ gameIds[g.id] = true; });
+    var weekStart = null;
+    var kickoffs = games.filter(function(g){ return g.kickoff; }).map(function(g){ return new Date(g.kickoff); });
+    if(kickoffs.length){
+      var earliest = kickoffs.reduce(function(a,b){ return b < a ? b : a; });
+      weekStart = tuesdayWindowStart(earliest);
+    }
+    return rosterUsernames().map(function(name){
+      var balance = startOfWeekBalance(name, weekStart, gameIds);
+      var wagered = state.wagers.filter(function(w){ return w.player === name && gameIds[w.gameId]; })
+        .reduce(function(sum, w){ return sum + w.points; }, 0);
+      var required = balance / 2;
+      return {
+        player: name,
+        team: displayName(name),
+        balance: balance,
+        required: required,
+        wagered: wagered,
+        shortBy: Math.max(0, required - wagered)
+      };
+    }).filter(function(r){ return r.wagered < r.required; })
+      .sort(function(a,b){ return b.shortBy - a.shortBy; });
+  }
+
+  function fmtHalf(n){
+    var v = Math.round(n*10)/10;
+    return Number.isInteger(v) ? String(v) : v.toFixed(1);
+  }
+
+  function weekVisibilityToggle(active, sport, week, value, label){
+    return '<button type="button" class="btn' + (active ? '' : ' ghost') + '" data-action="set-week-visibility" data-sport="' + esc(sport) + '" data-week="' + esc(week) + '" data-value="' + value + '">' + label + '</button>';
+  }
+
+  function renderWeekVisibilityCard(){
+    // Lets the commissioner decide exactly when each week's games appear on
+    // the This Week tab, instead of it always being driven purely by kickoff
+    // dates. "Auto" (the default for any week never touched here) keeps the
+    // original current-week-by-date behavior; Show/Hide are explicit
+    // overrides that win regardless of date. See isWeekVisible().
+    var groups = allSportWeeks();
+    var head = '<div class="section-title"><h3>Week visibility</h3></div>';
+    if(!groups.length){
+      return '<div class="card">' + head + '<div class="empty" style="border:none">No games with a kickoff yet — sync in odds first.</div></div>';
+    }
+    var sub = '<p class="eyebrow" style="margin:-6px 0 12px">Choose when each week\'s games show up on the This Week tab. "Auto" follows the usual current-week-by-date rule.</p>';
+    var rows = groups.map(function(grp){
+      var key = weekKey(grp.sport, grp.week);
+      var override = Object.prototype.hasOwnProperty.call(state.weekVisibility, key) ? state.weekVisibility[key] : null;
+      var effective = isWeekVisible(grp.sport, grp.week);
+      var stateLabel = override === true ? 'Shown (manual)' : override === false ? 'Hidden (manual)' : (effective ? 'Shown (auto)' : 'Hidden (auto)');
+      var buttons = weekVisibilityToggle(override === true, grp.sport, grp.week, 'show', 'Show') +
+        weekVisibilityToggle(override === false, grp.sport, grp.week, 'hide', 'Hide') +
+        weekVisibilityToggle(override === null, grp.sport, grp.week, 'auto', 'Auto');
+      return '<tr><td>' + esc(grp.sport) + ' — ' + esc(grp.week) + '</td>' +
+        '<td class="eyebrow">' + stateLabel + '</td>' +
+        '<td class="num"><div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">' + buttons + '</div></td></tr>';
+    }).join('');
+    return '<div class="card">' + head + sub + '<div class="table-wrap"><table class="board"><thead><tr><th>Week</th><th>Status</th><th class="num">Set</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+  }
+
+  function renderComplianceCard(){
+    var games = currentWeekGames();
+    var label = currentWeekLabel(games);
+    var rows = halfPointsReport();
+    var head = '<div class="section-title"><h3>Under-wagered this week</h3></div>';
+    if(!label){
+      return '<div class="card">' + head + '<div class="empty" style="border:none">No games are scheduled yet, so there\'s no current week to check.</div></div>';
+    }
+    var sub = '<p class="eyebrow" style="margin:-6px 0 12px">Current week: ' + esc(label) + ' &middot; flags anyone whose total points wagered across this week\'s games is under half the balance they had starting this week</p>';
+    if(!rows.length){
+      return '<div class="card">' + head + sub + '<div class="empty" style="border:none">Everyone has wagered at least half their points this week.</div></div>';
+    }
+    var body = rows.map(function(r){
+      return '<tr><td>' + esc(r.team) + '</td><td class="num mono">' + r.balance + '</td><td class="num mono">' + fmtHalf(r.required) + '</td><td class="num mono">' + r.wagered + '</td><td class="num"><span class="result-pill loss">short ' + fmtHalf(r.shortBy) + '</span></td></tr>';
+    }).join('');
+    return '<div class="card">' + head + sub + '<div class="table-wrap"><table class="board"><thead><tr><th>Team</th><th class="num">Week-start balance</th><th class="num">Half</th><th class="num">Wagered</th><th class="num">Status</th></tr></thead><tbody>' + body + '</tbody></table></div></div>';
+  }
+
+  function renderBalanceAdjustCard(){
+    // Lets the commissioner nudge a player's balance directly -- a bonus, a
+    // correction, or a penalty that falls outside normal ATS/O/U wagering.
+    // Stored as its own ledger of adjustments (rather than mutating a single
+    // "balance" field) so every change stays auditable and playerStats() can
+    // keep computing balance from history, the same way it already does for
+    // wins and losses.
+    var head = '<div class="section-title"><h3>Adjust a player\'s balance</h3></div>';
+    var keys = rosterUsernames();
+    if(!keys.length){
+      return '<div class="card">' + head + '<div class="empty" style="border:none">No players on the roster yet.</div></div>';
+    }
+    var options = keys.map(function(k){ return '<option value="' + esc(k) + '">' + esc(displayName(k)) + '</option>'; }).join('');
+    var sub = '<p class="eyebrow" style="margin:-6px 0 12px">Adds points to a player\'s balance -- use a minus sign to subtract instead.</p>';
+    var form = '<form class="panel" data-action="adjust-balance">' +
+      '<div class="grid3">' +
+        '<div class="field"><label>Player</label><select name="player">' + options + '</select></div>' +
+        '<div class="field"><label>Amount (+/-)</label><input class="mono" type="number" step="1" name="amount" placeholder="e.g. 100 or -50" required></div>' +
+        '<div class="field"><label>Note (optional)</label><input name="note" placeholder="Reason for this adjustment"></div>' +
+      '</div>' +
+      '<div class="pick-actions"><button class="btn" type="submit">Apply adjustment</button></div>' +
+      '</form>';
+    var log = '';
+    if(state.adjustments.length){
+      var rows = state.adjustments.slice().sort(function(a,b){ return b.ts - a.ts; }).map(function(a){
+        var amt = (a.amount > 0 ? '+' : '') + a.amount;
+        var color = a.amount > 0 ? 'var(--win)' : (a.amount < 0 ? 'var(--loss)' : 'var(--text)');
+        return '<tr><td>' + esc(displayName(a.player)) + '</td><td class="num mono" style="color:' + color + '">' + amt + '</td><td>' + esc(a.note || '—') + '</td></tr>';
+      }).join('');
+      log = '<div class="table-wrap" style="margin-top:14px"><table class="board"><thead><tr><th>Player</th><th class="num">Amount</th><th>Note</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    }
+    return '<div class="card">' + head + sub + form + log + '</div>';
+  }
+
+  function renderRosterBackupCard(){
+    // A safety net independent of the live artifact's own version history:
+    // downloads a snapshot of every account's profile info (never raw
+    // passwords or even their hashes/salts -- those never leave the page)
+    // so the commissioner has an off-artifact copy of the roster on hand.
+    var head = '<div class="section-title"><h3>Backup roster</h3></div>';
+    if(!state.players.length){
+      return '<div class="card">' + head + '<div class="empty" style="border:none">No accounts have signed up yet.</div></div>';
+    }
+    var sub = '<p class="eyebrow" style="margin:-6px 0 12px">Downloads everyone\'s account info (usernames, names, emails, signup dates) as a JSON file -- never passwords, which are only ever stored as salted hashes. Keep this somewhere safe as a backup.</p>';
+    var btn = '<div class="pick-actions"><button type="button" class="btn ghost" data-action="download-roster-backup">Download roster backup (' + state.players.length + ' account' + (state.players.length===1?'':'s') + ')</button></div>';
+    return '<div class="card">' + head + sub + btn + '</div>';
+  }
+
+  // ---------- persistence ----------
+  function toast(msg, ms){
+    var root = document.getElementById('toast-root');
+    if(!root) return;
+    var el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = msg;
+    root.appendChild(el);
+    setTimeout(function(){ el.remove(); }, ms || 3400);
+  }
+
+  function buildFullDocument(){
+    var json = JSON.stringify(state).replace(/</g, '\\u003c');
+    return '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>' + esc(TITLE_TEXT) + '</title>\n<style id="app-style">' + STYLE_TEXT + '</style>\n</head>\n<body>\n<div id="toast-root"></div>\n<div id="app">Loading the board…</div>\n<script id="state-data" type="application/json">' + json + '<\/script>\n<script>' + SCRIPT_TEXT + '<\/script>\n</body>\n</html>';
+  }
+
+  var saving = false;
+  function save(successMsg){
+    render();
+    if(view.readOnly){
+      toast("You're viewing read-only — ask the pool owner for edit access to save picks.");
+      return Promise.resolve(false);
+    }
+    if(!artifactCap){
+      if(!warnedNoCap){ warnedNoCap = true; toast('Live saving isn\'t available in this view — changes will only last this session.', 4500); }
+      return Promise.resolve(false);
+    }
+    if(saving) return Promise.resolve(false);
+    saving = true;
+    return artifactCap.publish(buildFullDocument()).then(function(){
+      saving = false;
+      if(successMsg) toast(successMsg);
+      return true;
+    }).catch(function(err){
+      saving = false;
+      var code = err && err.code;
+      if(code === 'not_writer' || code === 'not_granted' || code === 'consent_required'){
+        view.readOnly = true;
+        render();
+        toast("You're viewing read-only — ask the pool owner for edit access to save picks.");
+      } else if(code === 'conflict'){
+        toast('Someone else just saved a change — reloading with the latest board…');
+      } else if(code === 'not_declared' || code === 'capability_disabled' || code === 'capability_removed'){
+        artifactCap = null;
+        if(!warnedNoCap){ warnedNoCap = true; toast('Live saving isn\'t available in this view — changes will only last this session.', 4500); }
+      } else {
+        toast('Could not save that just now — please try again.');
+      }
+      return false;
+    });
+  }
+
+  // ---------- rendering ----------
+  function render(){
+    var app = document.getElementById('app');
+    if(!app) return;
+    app.innerHTML = renderHeader() + renderTabs() + (view.readOnly ? '<div class="readonly-banner">Read-only view — ask the pool owner to give you edit access so you can submit picks.</div>' : '') + '<div class="app-shell"><div class="layout"><aside class="sidebar card">' + renderMessageBoard() + '</aside><main>' + renderTabContent() + '</main></div><footer class="note">Points, not payments — a friendly office pool. Spread &amp; total lines are entered by the commissioner, not pulled live.</footer></div>';
+  }
+
+  function renderHeader(){
+    var chip;
+    if(currentPlayer){
+      var stats = playerStats(currentPlayer);
+      chip = '<div class="who-chip"><div><div class="name">' + esc(displayName(currentPlayer)) + '</div><button type="button" class="linklike" data-action="log-out">log out</button></div><div class="bal mono">' + fmtNum(stats.balance) + ' pts</div></div>';
+    } else {
+      chip = '<button type="button" class="btn ghost" data-action="goto-auth">Log in / Sign up</button>';
+    }
+    return '<header class="top"><div class="row"><h1 class="pool-title">' + esc(state.poolName) + '</h1>' + chip + '</div></header>';
+  }
+
+  function renderTabs(){
+    var tabs = [['week','This Week'],['leaderboard','Leaderboard'],['picks','All Picks'],['rules','Rules'],['admin','Commissioner']];
+    return '<nav class="tabs">' + tabs.map(function(t){
+      return '<button type="button" class="' + (view.tab===t[0]?'active':'') + '" data-action="set-tab" data-tab="' + t[0] + '">' + t[1] + '</button>';
+    }).join('') + '</nav>';
+  }
+
+  function renderMessageBoard(){
+    var posts = state.announcements.slice().sort(function(a,b){ return b.postedAt < a.postedAt ? -1 : 1; });
+    var html = '<div class="board-head"><h3>Commissioner\'s Board</h3></div>';
+    if(view.isCommissioner){
+      html += '<form class="board-post-form" data-action="post-announcement"><textarea name="text" maxlength="500" placeholder="Post an announcement for the group…" required></textarea><div class="pick-actions"><button class="btn" type="submit">Post</button></div></form>';
+    }
+    if(!posts.length){
+      html += '<div class="board-empty">Nothing posted yet.</div>';
+    } else {
+      posts.forEach(function(p){
+        html += '<div class="board-post"><div class="msg">' + esc(p.text) + '</div><div class="meta"><span class="eyebrow">' + esc(fmtDate(p.postedAt)) + '</span>' + (view.isCommissioner ? '<button type="button" class="linklike" data-action="delete-announcement" data-id="' + p.id + '">remove</button>' : '') + '</div></div>';
+      });
+    }
+    return html;
+  }
+
+  function renderTabContent(){
+    if(view.tab === 'week') return renderWeekTab();
+    if(view.tab === 'leaderboard') return renderLeaderboardTab();
+    if(view.tab === 'picks') return renderPicksTab();
+    if(view.tab === 'rules') return renderRulesTab();
+    if(view.tab === 'admin') return renderAdminTab();
+    return '';
+  }
+
+  function renderRulesTab(){
+    // Everyone can read the pool's rules; only the commissioner gets an
+    // editable textarea + Save. Plain text, not markdown -- rendered with
+    // white-space:pre-wrap so line breaks the commissioner typed show up
+    // as-is without needing any formatting syntax.
+    var head = '<div class="section-title"><h3>Pool rules</h3></div>';
+    if(view.isCommissioner){
+      var sub = '<p class="eyebrow" style="margin:-6px 0 12px">Visible to everyone in the pool. Edit below and save when you\'re done.</p>';
+      var form = '<form class="panel" data-action="save-rules">' +
+        '<textarea name="rulesText" class="rules-textarea" placeholder="Type out the pool\'s rules here…">' + esc(state.rulesText) + '</textarea>' +
+        '<div class="pick-actions"><button class="btn" type="submit">Save rules</button></div>' +
+        '</form>';
+      return '<div class="card">' + head + sub + form + '</div>';
+    }
+    if(!state.rulesText || !state.rulesText.trim()){
+      return '<div class="card">' + head + '<div class="empty" style="border:none">The commissioner hasn\'t posted any rules yet.</div></div>';
+    }
+    return '<div class="card">' + head + '<div class="rules-text">' + esc(state.rulesText) + '</div></div>';
+  }
+
+  function sortedGames(){
+    return state.games.slice().sort(function(a,b){
+      var ak = a.kickoff || '9999', bk = b.kickoff || '9999';
+      if(ak !== bk) return ak < bk ? -1 : 1;
+      return (a.order||0) - (b.order||0);
+    });
+  }
+
+  function renderAuthPanel(){
+    var mode = view.authMode === 'login' ? 'login' : 'signup';
+    var tabs = '<div class="auth-tabs">' +
+      '<button type="button" class="' + (mode==='signup'?'active':'') + '" data-action="auth-mode" data-mode="signup">Sign up</button>' +
+      '<button type="button" class="' + (mode==='login'?'active':'') + '" data-action="auth-mode" data-mode="login">Log in</button>' +
+    '</div>';
+    var form;
+    if(mode === 'signup'){
+      form = '<form class="panel" id="auth-card" data-action="signup">' +
+        '<div class="grid2">' +
+          '<div class="field"><label>Username</label><input name="username" maxlength="24" autocomplete="username" required></div>' +
+          '<div class="field"><label>Team name</label><input name="teamName" maxlength="30" required></div>' +
+        '</div>' +
+        '<div class="grid2">' +
+          '<div class="field"><label>First name</label><input name="firstName" maxlength="30" required></div>' +
+          '<div class="field"><label>Last name</label><input name="lastName" maxlength="30" required></div>' +
+        '</div>' +
+        '<div class="field"><label>Email</label><input type="email" name="email" required></div>' +
+        '<div class="grid2">' +
+          '<div class="field"><label>Password</label><input type="password" name="password" minlength="6" autocomplete="new-password" required></div>' +
+          '<div class="field"><label>Confirm password</label><input type="password" name="confirmPassword" minlength="6" autocomplete="new-password" required></div>' +
+        '</div>' +
+        '<p class="hint">This keeps picks straight within the group — it isn\'t real account security. Please don\'t reuse a password you use anywhere else.</p>' +
+        '<div class="pick-actions"><button class="btn" type="submit">Create account</button></div>' +
+      '</form>';
+    } else {
+      form = '<form class="panel" id="auth-card" data-action="login">' +
+        '<div class="grid2">' +
+          '<div class="field"><label>Username</label><input name="username" autocomplete="username" required></div>' +
+          '<div class="field"><label>Password</label><input type="password" name="password" autocomplete="current-password" required></div>' +
+        '</div>' +
+        '<div class="pick-actions"><button class="btn" type="submit">Log in</button></div>' +
+      '</form>';
+    }
+    return '<div class="card">' + tabs + form + '</div>';
+  }
+
+  function renderWeekTab(){
+    var allGames = sortedGames();
+    var authHtml = currentPlayer ? '' : renderAuthPanel();
+    if(!allGames.length){
+      return authHtml + '<div class="empty">No games on the board yet.<br>Head to the <strong>Commissioner</strong> tab to sync in this week\'s odds.</div>';
+    }
+    // Which week(s) show here is controlled per sport+week by the
+    // commissioner's Week visibility tool (Commissioner tab) -- defaulting,
+    // for any week not explicitly toggled, to the same "current week by
+    // kickoff date, per sport" rule this always used (see isWeekVisible()).
+    // Older and future weeks still show up in All Picks and the Leaderboard;
+    // this tab is just "what to pick right now."
+    // A game with no kickoff set at all can't be placed in any date window,
+    // so it always shows here rather than silently vanishing -- the
+    // commissioner added it without a time for a reason.
+    var games = allGames.filter(function(g){ return !g.kickoff || isWeekVisible(g.sport, g.week); });
+    var label = currentWeekLabel(games);
+    // A game drops off This Week the moment it locks (kickoff has passed, or
+    // it's been marked final) -- this tab is only for games still open to
+    // pick. The toggle below is an opt-in way to still glance back at a
+    // locked game (e.g. to double check a pick) without it cluttering the
+    // default view.
+    var visible = games.filter(function(g){ return view.showCompleted || !isLocked(g); });
+    var groups = [];
+    var byKey = {};
+    visible.forEach(function(g){
+      var key = g.sport + '|' + g.week;
+      if(!byKey[key]){ byKey[key] = { label: g.sport + ' — ' + g.week, items: [] }; groups.push(byKey[key]); }
+      byKey[key].items.push(g);
+    });
+    var toolbar = '<div class="toolbar"><span class="eyebrow">' + (label ? 'Showing ' + esc(label) : 'Current week') + '</span><label class="toggle"><input type="checkbox" data-action="toggle-completed" ' + (view.showCompleted?'checked':'') + '> Show locked games</label></div>';
+    var html = authHtml + toolbar;
+    if(!games.length){
+      html += '<div class="empty">No games scheduled for the current week yet.<br>Check the <strong>All Picks</strong> tab for other weeks, or the Commissioner tab to add matchups.</div>';
+      return html;
+    }
+    if(!visible.length){
+      html += '<div class="empty">Every game this week has locked. Toggle "show locked games" above to review them, or check the All Picks tab.</div>';
+    }
+    groups.forEach(function(grp){
+      html += '<div class="week-head"><h2>' + esc(grp.label) + '</h2></div>';
+      grp.items.forEach(function(g){ html += renderGameCard(g); });
+    });
+    return html;
+  }
+
+  function isLocked(g){
+    if(g.status === 'final') return true;
+    if(g.kickoff){ return Date.now() >= new Date(g.kickoff).getTime(); }
+    return false;
+  }
+
+  function earliestWageredKickoff(player, sport, week){
+    // Among this player's wagers (ATS or O/U, any game) within one sport's
+    // week, returns the earliest kickoff time they've already staked a pick
+    // on -- or null if they haven't wagered on anything in that week yet.
+    var wageredGameIds = {};
+    state.wagers.forEach(function(w){ if(w.player === player) wageredGameIds[w.gameId] = true; });
+    var kickoffs = state.games
+      .filter(function(g){ return g.sport === sport && g.week === week && g.kickoff && wageredGameIds[g.id]; })
+      .map(function(g){ return new Date(g.kickoff).getTime(); });
+    return kickoffs.length ? Math.min.apply(null, kickoffs) : null;
+  }
+
+  function isWeekLockedForPlayer(g, player){
+    // Once a player's earliest-wagered game of the week has kicked off, they
+    // can no longer place or change picks on any OTHER game that week --
+    // even ones that haven't started yet -- so nobody can sandbag late games
+    // after watching how their early ones turn out. A game that's already
+    // locked on its own merits (isLocked) doesn't need this check.
+    if(!player) return false;
+    var earliest = earliestWageredKickoff(player, g.sport, g.week);
+    return earliest !== null && Date.now() >= earliest;
+  }
+
+  function renderGameCard(g){
+    var homeLine = g.favorite === 'home' ? -g.spread : g.spread;
+    var awayLine = g.favorite === 'away' ? -g.spread : g.spread;
+    var locked = isLocked(g);
+    var kickoffStr = g.kickoff ? new Date(g.kickoff).toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit'}) : 'Kickoff TBD';
+    var head = '<div class="g-head"><span class="eyebrow">' + esc(g.sport) + ' · ' + esc(kickoffStr) + '</span><div class="lines"><span class="chip">O/U ' + fmtNum(g.total) + '</span><span class="status-badge ' + (g.status==='final'?'final':'') + '">' + (g.status==='final' ? 'Final' : (locked ? 'Locked' : 'Open')) + '</span></div></div>';
+
+    var matchup = '<div class="matchup">' +
+      '<div class="team"><div class="tname">' + esc(g.away) + (g.status==='final' ? ' <span class="tscore mono">' + g.finalAway + '</span>' : '') + '</div><div class="tline mono">' + fmtLine(awayLine) + '</div></div>' +
+      '<div class="vs">AT</div>' +
+      '<div class="team" style="text-align:right"><div class="tname">' + esc(g.home) + (g.status==='final' ? ' <span class="tscore mono">' + g.finalHome + '</span>' : '') + '</div><div class="tline mono">' + fmtLine(homeLine) + '</div></div>' +
+      '</div>';
+
+    var body;
+    var weekLocked = currentPlayer && !locked ? isWeekLockedForPlayer(g, currentPlayer) : false;
+    if(!currentPlayer){
+      body = '<div class="recap"><span class="eyebrow">Log in or create an account above to make picks on this game.</span></div>';
+    } else if(locked || weekLocked){
+      var ats = playerWager(g.id, currentPlayer, 'ATS');
+      var ou = playerWager(g.id, currentPlayer, 'OU');
+      var gr = gameResult(g);
+      body = '<div class="recap">';
+      if(ats){
+        var atsRes = wagerResult(ats, g);
+        body += '<div class="recap-row"><span>ATS — ' + esc(ats.pick==='home'?g.home:g.away) + ' ' + fmtLine(ats.pick==='home'?homeLine:awayLine) + ' for ' + ats.points + ' pts</span><span class="result-pill ' + atsRes + '">' + atsRes + '</span></div>';
+      }
+      if(ou){
+        var ouRes = wagerResult(ou, g);
+        body += '<div class="recap-row"><span>O/U — ' + esc(ou.pick==='over'?'Over':'Under') + ' ' + fmtNum(g.total) + ' for ' + ou.points + ' pts</span><span class="result-pill ' + ouRes + '">' + ouRes + '</span></div>';
+      }
+      if(!ats && !ou) body += '<span class="eyebrow">' + (weekLocked ? 'No pick was made before your first wagered game of the week kicked off.' : 'No pick made before this game locked.') + '</span>';
+      if(weekLocked) body += '<div class="recap-row"><span class="eyebrow">Picks for ' + esc(g.sport) + ' — ' + esc(g.week) + ' are locked for you — your first wagered game of the week already kicked off.</span></div>';
+      body += '</div>';
+    } else {
+      // Once a market (ATS or OU) has been submitted, it's locked in for good --
+      // no more editing, even while the game is still open. Each market is
+      // independent: submitting ATS doesn't touch whether OU can still be
+      // picked, and vice versa. A submitted market renders as a read-only
+      // recap row (same look as a fully locked game); an un-submitted market
+      // still renders its editable radio + points input.
+      var atsW = playerWager(g.id, currentPlayer, 'ATS');
+      var ouW = playerWager(g.id, currentPlayer, 'OU');
+      var lockedRows = '';
+      if(atsW){
+        var atsResOpen = wagerResult(atsW, g);
+        lockedRows += '<div class="recap-row"><span>ATS — ' + esc(atsW.pick==='home'?g.home:g.away) + ' ' + fmtLine(atsW.pick==='home'?homeLine:awayLine) + ' for ' + atsW.points + ' pts</span><span class="result-pill ' + atsResOpen + '">' + atsResOpen + '</span></div>';
+      }
+      if(ouW){
+        var ouResOpen = wagerResult(ouW, g);
+        lockedRows += '<div class="recap-row"><span>O/U — ' + esc(ouW.pick==='over'?'Over':'Under') + ' ' + fmtNum(g.total) + ' for ' + ouW.points + ' pts</span><span class="result-pill ' + ouResOpen + '">' + ouResOpen + '</span></div>';
+      }
+      var lockedBlock = lockedRows ? '<div class="recap">' + lockedRows + '<span class="eyebrow">Submitted picks are locked in and can\'t be changed.</span></div>' : '';
+
+      var openBlocks = '';
+      if(!atsW){
+        openBlocks += '<div class="pick-block"><span class="label">ATS</span>' +
+          '<label class="opt"><input type="radio" name="ats-pick" value="away"> ' + esc(g.away) + ' ' + fmtLine(awayLine) + '</label>' +
+          '<label class="opt"><input type="radio" name="ats-pick" value="home"> ' + esc(g.home) + ' ' + fmtLine(homeLine) + '</label>' +
+          '<label class="opt"><input type="radio" name="ats-pick" value="" checked> No pick</label>' +
+          '<input class="pts-input" type="number" min="1" step="1" name="ats-points" placeholder="pts">' +
+          '</div>';
+      }
+      if(!ouW){
+        openBlocks += '<div class="pick-block"><span class="label">O/U</span>' +
+          '<label class="opt"><input type="radio" name="ou-pick" value="over"> Over ' + fmtNum(g.total) + '</label>' +
+          '<label class="opt"><input type="radio" name="ou-pick" value="under"> Under ' + fmtNum(g.total) + '</label>' +
+          '<label class="opt"><input type="radio" name="ou-pick" value="" checked> No pick</label>' +
+          '<input class="pts-input" type="number" min="1" step="1" name="ou-points" placeholder="pts">' +
+          '</div>';
+      }
+      var formBlock = openBlocks ? '<form class="pick-form" data-action="save-picks" data-game="' + g.id + '">' + openBlocks + '<p class="eyebrow" style="margin:6px 0 0">Picks lock in once submitted and can\'t be changed.</p><div class="pick-actions"><button class="btn" type="submit">Save picks</button></div></form>' : '';
+
+      body = lockedBlock + formBlock;
+    }
+
+    return '<div class="card game-card">' + head + matchup + body + '</div>';
+  }
+
+  function renderLeaderboardTab(){
+    var keys = rosterUsernames();
+    if(!keys.length){
+      return '<div class="empty">No one\'s on the board yet. Once players make picks (or the commissioner adds them), standings show up here.</div>';
+    }
+    var rows = keys.map(function(k){ return { key:k, stats: playerStats(k) }; });
+    rows.sort(function(a,b){ return b.stats.balance - a.stats.balance; });
+    var body = rows.map(function(r, i){
+      var d = r.stats.balance - state.startingBalance;
+      var nameCell = '<button type="button" class="player-link" data-action="view-player" data-player="' + esc(r.key) + '">' + esc(displayName(r.key)) + '</button>' + (r.key===currentPlayer?' <span class="eyebrow">(you)</span>':'');
+      return '<tr><td class="rank ' + (i===0?'top':'') + '">' + (i+1) + '</td><td>' + nameCell + '</td><td class="num mono">' + r.stats.wins + '-' + r.stats.losses + '-' + r.stats.pushes + '</td><td class="num mono" style="color:' + (d>0?'var(--win)':d<0?'var(--loss)':'var(--text)') + '">' + r.stats.balance + '</td><td class="num mono" style="color:var(--text-dim)">' + (r.stats.pending? r.stats.pending : '—') + '</td></tr>';
+    }).join('');
+    var html = '<div class="card"><div class="table-wrap"><table class="board"><thead><tr><th>#</th><th>Player</th><th class="num">W-L-P</th><th class="num">Balance</th><th class="num">Pending</th></tr></thead><tbody>' + body + '</tbody></table></div></div>' +
+      '<div class="eyebrow" style="text-align:center">Everyone starts at ' + state.startingBalance + ' pts</div>' +
+      '<p class="eyebrow" style="text-align:center">Click a player\'s name to see picks on games that have kicked off</p>';
+    if(view.viewingPlayer && keys.indexOf(view.viewingPlayer) !== -1){
+      html += renderPlayerPicksCard(view.viewingPlayer);
+    }
+    return html;
+  }
+
+  function renderPlayerPicksCard(username){
+    // Anyone can drill into any player's picks from the leaderboard, but only
+    // for games that have already kicked off (or gone final) -- same privacy
+    // boundary as the All Picks tab, so this never leaks a still-open pick.
+    var name = displayName(username);
+    var wagers = state.wagers.filter(function(w){
+      if(w.player !== username) return false;
+      var g = gameById(w.gameId);
+      return g && isLocked(g);
+    });
+    var head = '<div class="section-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3>' + esc(name) + '’s picks</h3><button type="button" class="btn ghost" data-action="close-player-picks">Close</button></div>';
+    if(!wagers.length){
+      return '<div class="card">' + head + '<div class="empty" style="border:none">No picks yet on games that have started.</div></div>';
+    }
+    wagers = wagers.slice().sort(function(a,b){
+      var ga = gameById(a.gameId), gb = gameById(b.gameId);
+      var ka = ga && ga.kickoff ? new Date(ga.kickoff).getTime() : 0;
+      var kb = gb && gb.kickoff ? new Date(gb.kickoff).getTime() : 0;
+      return kb - ka;
+    });
+    var rows = wagers.map(function(w){
+      var g = gameById(w.gameId);
+      var res = wagerResult(w, g);
+      var pickLabel = w.type === 'ATS' ? (w.pick==='home'?g.home:g.away) : (w.pick==='over'?'Over':'Under') + ' ' + fmtNum(g.total);
+      var matchup = '<div>' + esc(g.away) + ' @ ' + esc(g.home) + '</div><div class="eyebrow" style="margin-top:2px">' + esc(g.sport) + ' · ' + esc(g.week) + '</div>';
+      return '<tr><td>' + matchup + '</td><td class="eyebrow">' + w.type + '</td><td>' + esc(pickLabel) + '</td><td class="num mono">' + w.points + '</td><td class="num"><span class="result-pill ' + res + '">' + res + '</span></td></tr>';
+    }).join('');
+    return '<div class="card">' + head + '<div class="table-wrap"><table class="board"><thead><tr><th>Game</th><th>Type</th><th>Pick</th><th class="num">Pts</th><th class="num">Result</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+  }
+
+  function renderPicksTab(){
+    var games = sortedGames();
+    if(!state.wagers.length){
+      return '<div class="empty">No picks placed yet.</div>';
+    }
+    function rowsFor(list, g){
+      return list.slice().sort(function(a,b){ return displayName(a.player).localeCompare(displayName(b.player)); }).map(function(w){
+        var res = wagerResult(w, g);
+        var pickLabel = w.type === 'ATS' ? (w.pick==='home'?g.home:g.away) : (w.pick==='over'?'Over':'Under') + ' ' + fmtNum(g.total);
+        return '<tr><td>' + esc(displayName(w.player)) + '</td><td class="eyebrow">' + w.type + '</td><td>' + esc(pickLabel) + '</td><td class="num mono">' + w.points + '</td><td class="num"><span class="result-pill ' + res + '">' + res + '</span></td></tr>';
+      }).join('');
+    }
+    function table(rowsHtml){
+      return '<div class="table-wrap"><table class="board"><thead><tr><th>Player</th><th>Type</th><th>Pick</th><th class="num">Pts</th><th class="num">Result</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
+    }
+    var html = '';
+    games.forEach(function(g){
+      var ws = state.wagers.filter(function(w){ return w.gameId === g.id; });
+      if(!ws.length) return;
+      var title = '<div class="section-title"><h3>' + esc(g.away) + ' @ ' + esc(g.home) + '<span class="eyebrow" style="margin-left:8px">' + esc(g.sport) + ' · ' + esc(g.week) + '</span></h3></div>';
+      if(!isLocked(g)){
+        // Everyone ELSE's picks stay hidden until this specific game kicks
+        // off, so nobody can shape their pick around what others already
+        // chose -- but a player can always see their OWN picks here, on any
+        // game, whether or not it's started yet.
+        var ownWs = currentPlayer ? ws.filter(function(w){ return w.player === currentPlayer; }) : [];
+        var otherCount = ws.length - ownWs.length;
+        var body = '';
+        if(ownWs.length) body += table(rowsFor(ownWs, g));
+        if(otherCount > 0) body += '<div class="empty" style="border:none">' + otherCount + ' other pick' + (otherCount===1?'':'s') + ' made on this game — hidden until kickoff.</div>';
+        html += '<div class="card">' + title + body + '</div>';
+        return;
+      }
+      html += '<div class="card">' + title + table(rowsFor(ws, g)) + '</div>';
+    });
+    return html || '<div class="empty">No picks placed yet.</div>';
+  }
+
+  function renderAdminTab(){
+    if(!view.isCommissioner){
+      return '<div class="card pin-gate"><h3>Commissioner sign-in</h3><p class="eyebrow" style="max-width:340px">Enter the commissioner PIN to add games, set lines, and post final scores.</p><form data-action="admin-login"><input class="mono" name="pin" placeholder="PIN" required><div style="margin-top:12px"><button class="btn" type="submit">Unlock</button></div></form></div>';
+    }
+    // There's no standalone "Add a game" form anymore -- games come in via
+    // the odds sync. This form still appears, but ONLY while actively
+    // editing an existing game (adjusting a line, kickoff, etc.), triggered
+    // by the "Edit" button in the games list below.
+    var editing = view.editingGameId ? gameById(view.editingGameId) : null;
+    var addForm = '';
+    if(editing){
+      addForm = '<div class="card">' +
+        '<div class="section-title"><h3>Edit game</h3></div>' +
+        '<form class="panel" data-action="save-game" data-editing="' + editing.id + '">' +
+        '<div class="grid3">' +
+          '<div class="field"><label>Sport</label><select name="sport">' +
+            ['NFL','NCAAF'].map(function(s){ return '<option value="' + s + '" ' + (editing.sport===s ? 'selected' : '') + '>' + s + '</option>'; }).join('') +
+          '</select></div>' +
+          '<div class="field"><label>Week / label</label><input name="week" value="' + esc(editing.week) + '" required></div>' +
+          '<div class="field"><label>Kickoff (optional)</label><input type="datetime-local" name="kickoff" value="' + (editing.kickoff ? toLocalInputValue(editing.kickoff) : '') + '"></div>' +
+        '</div>' +
+        '<div class="grid2">' +
+          '<div class="field"><label>Away team</label><input name="away" value="' + esc(editing.away) + '" required></div>' +
+          '<div class="field"><label>Home team</label><input name="home" value="' + esc(editing.home) + '" required></div>' +
+        '</div>' +
+        '<div class="grid3">' +
+          '<div class="field"><label>Favorite</label><select name="favorite">' +
+            '<option value="home" ' + (editing.favorite==='home' ? 'selected':'') + '>Home team</option>' +
+            '<option value="away" ' + (editing.favorite==='away' ? 'selected':'') + '>Away team</option>' +
+          '</select></div>' +
+          '<div class="field"><label>Spread (0 = pick\'em)</label><input class="mono" type="number" step="0.5" min="0" name="spread" value="' + editing.spread + '" required></div>' +
+          '<div class="field"><label>Total (over/under)</label><input class="mono" type="number" step="0.5" min="0" name="total" value="' + editing.total + '" required></div>' +
+        '</div>' +
+        '<div class="pick-actions"><button type="button" class="btn ghost" data-action="cancel-edit-game">Cancel</button><button class="btn" type="submit">Save changes</button></div>' +
+        '</form></div>';
+    }
+
+    var games = sortedGames();
+    var collapsed = view.gamesListCollapsed;
+    var gamesList = '<div class="card"><div class="section-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">' +
+      '<h3>Games on the board <span class="eyebrow">(' + games.length + ')</span></h3>' +
+      (games.length ? '<button type="button" class="btn ghost" data-action="toggle-games-list">' + (collapsed ? 'Expand' : 'Collapse') + '</button>' : '') +
+      '</div>';
+    if(!games.length){
+      gamesList += '<div class="empty" style="border:none">No games yet — sync in this week\'s odds to load matchups.</div>';
+    } else if(collapsed){
+      gamesList += '<div class="empty" style="border:none">' + games.length + ' game' + (games.length===1?'':'s') + ' hidden — click Expand to view.</div>';
+    } else {
+      games.forEach(function(g){
+        gamesList += '<div class="admin-game-row"><div><strong>' + esc(g.away) + ' @ ' + esc(g.home) + '</strong><div class="meta">' + esc(g.sport) + ' · ' + esc(g.week) + ' · ' + (g.favorite==='home'?esc(g.home):esc(g.away)) + ' ' + fmtLine(-g.spread) + ' · O/U ' + fmtNum(g.total) + (g.status==='final' ? ' · Final ' + g.finalAway + '-' + g.finalHome : '') + '</div></div>' +
+          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+          (g.status === 'final'
+            ? '<button type="button" class="btn ghost" data-action="reopen-game" data-game="' + g.id + '">Reopen</button>'
+            : '<form class="inline-settle" data-action="settle-game" data-game="' + g.id + '"><input type="number" name="finalAway" placeholder="Away" required><span class="eyebrow">–</span><input type="number" name="finalHome" placeholder="Home" required><button class="btn ghost" type="submit">Settle</button></form>'
+          ) +
+          '<button type="button" class="btn ghost" data-action="edit-game" data-game="' + g.id + '">Edit</button>' +
+          '<button type="button" class="btn danger" data-action="delete-game" data-game="' + g.id + '">Delete</button>' +
+          '</div></div>';
+      });
+    }
+    gamesList += '</div>';
+
+    var settings = '<div class="card"><div class="section-title"><h3>Pool settings</h3></div>' +
+      '<form class="panel" data-action="save-settings">' +
+      '<div class="grid3">' +
+        '<div class="field"><label>Pool name</label><input name="poolName" value="' + esc(state.poolName) + '" required></div>' +
+        '<div class="field"><label>Starting balance</label><input class="mono" type="number" name="startingBalance" value="' + state.startingBalance + '" required></div>' +
+        '<div class="field"><label>Commissioner PIN</label><input class="mono" name="commissionerPin" value="' + esc(state.commissionerPin) + '" required></div>' +
+      '</div>' +
+      '<div class="pick-actions"><button class="btn" type="submit">Save settings</button></div>' +
+      '</form></div>';
+
+    var weekVisibility = renderWeekVisibilityCard();
+    var compliance = renderComplianceCard();
+    var balanceAdjust = renderBalanceAdjustCard();
+    var rosterBackup = renderRosterBackupCard();
+    var email = renderEmailCard();
+
+    return addForm + gamesList + weekVisibility + compliance + balanceAdjust + rosterBackup + email + settings;
+  }
+
+  function playersWithEmail(){
+    return state.players.filter(function(p){ return p.email; });
+  }
+
+  function renderEmailCard(){
+    // There's no email-sending service behind this page (a static, published
+    // page can't send mail itself), so this composes a mailto: link with
+    // every player's email address on BCC -- not To/CC, so nobody's address
+    // is exposed to everyone else -- and hands it to the commissioner's own
+    // mail client to review and send. It's one click short of automatic
+    // rather than fully automatic, but it needs no server, no API key, and
+    // no third-party access to your roster's email addresses.
+    var recipients = playersWithEmail();
+    var head = '<div class="section-title"><h3>Email the pool</h3></div>';
+    if(!recipients.length){
+      return '<div class="card">' + head + '<div class="empty" style="border:none">No players with an email on file yet.</div></div>';
+    }
+    var sub = '<p class="eyebrow" style="margin:-6px 0 12px">Opens your email app with all ' + recipients.length + ' player' + (recipients.length===1?'':'s') + ' BCC\'d, so addresses stay private between players.</p>';
+    var form = '<form class="panel" data-action="compose-email">' +
+      '<div class="field"><label>Subject</label><input name="subject" value="' + esc(state.poolName) + ' update" required></div>' +
+      '<div class="field"><label>Message</label><textarea name="body" rows="5" placeholder="Write your message…" required></textarea></div>' +
+      '<div class="pick-actions"><button class="btn" type="submit">Open email to ' + recipients.length + ' player' + (recipients.length===1?'':'s') + '</button></div>' +
+      '</form>';
+    return '<div class="card">' + head + sub + form + '</div>';
+  }
+
+  // ---------- events ----------
+  document.addEventListener('click', function(e){
+    var el = e.target.closest('[data-action]');
+    if(!el) return;
+    var action = el.getAttribute('data-action');
+    if(action === 'set-tab'){
+      view.tab = el.getAttribute('data-tab');
+      render();
+    } else if(action === 'log-out'){
+      currentPlayer = null;
+      try{ localStorage.removeItem('poolUsername'); }catch(err){}
+      render();
+    } else if(action === 'goto-auth'){
+      view.tab = 'week';
+      render();
+      var authEl = document.getElementById('auth-card');
+      if(authEl) authEl.scrollIntoView({behavior:'smooth', block:'start'});
+    } else if(action === 'auth-mode'){
+      view.authMode = el.getAttribute('data-mode');
+      render();
+    } else if(action === 'toggle-completed'){
+      view.showCompleted = el.checked;
+      render();
+    } else if(action === 'edit-game'){
+      view.editingGameId = el.getAttribute('data-game');
+      render();
+      var f = document.querySelector('form[data-action="save-game"]');
+      if(f) f.scrollIntoView({behavior:'smooth', block:'start'});
+    } else if(action === 'cancel-edit-game'){
+      view.editingGameId = null;
+      render();
+    } else if(action === 'view-player'){
+      view.viewingPlayer = el.getAttribute('data-player');
+      render();
+      var pc = document.querySelector('[data-action="close-player-picks"]');
+      if(pc) pc.closest('.card').scrollIntoView({behavior:'smooth', block:'start'});
+    } else if(action === 'close-player-picks'){
+      view.viewingPlayer = null;
+      render();
+    } else if(action === 'toggle-games-list'){
+      view.gamesListCollapsed = !view.gamesListCollapsed;
+      render();
+    } else if(action === 'set-week-visibility'){
+      if(!view.isCommissioner) return;
+      var vSport = el.getAttribute('data-sport');
+      var vWeek = el.getAttribute('data-week');
+      var vValue = el.getAttribute('data-value');
+      var vKey = weekKey(vSport, vWeek);
+      if(vValue === 'show') state.weekVisibility[vKey] = true;
+      else if(vValue === 'hide') state.weekVisibility[vKey] = false;
+      else delete state.weekVisibility[vKey];
+      save('Updated visibility for ' + vSport + ' — ' + vWeek + '.');
+    } else if(action === 'download-roster-backup'){
+      if(!view.isCommissioner) return;
+      if(!downloadsCap){ toast('Downloads aren\'t available in this view.'); return; }
+      var backup = {
+        pool: state.poolName,
+        exportedAt: new Date().toISOString(),
+        accounts: rosterUsernames().map(function(u){
+          var p = findPlayer(u);
+          return p ? {
+            username: p.username, teamName: p.teamName, firstName: p.firstName,
+            lastName: p.lastName, email: p.email, createdAt: p.createdAt
+          } : { username: u, note: 'wagered under this name but never created an account' };
+        })
+      };
+      var stamp = new Date().toISOString().slice(0, 10);
+      var safeName = (state.poolName || 'pool').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'pool';
+      downloadsCap.save({ filename: safeName + '-roster-backup-' + stamp + '.json', data: JSON.stringify(backup, null, 2) })
+        .then(function(){ toast('Roster backup saved.'); })
+        .catch(function(err){
+          var code = err && err.code;
+          if(code === 'declined') return;
+          toast('Could not save the backup file (' + (code || 'unknown error') + ').');
+        });
+    } else if(action === 'delete-game'){
+      var gid = el.getAttribute('data-game');
+      var g = gameById(gid);
+      if(g && confirm('Delete ' + g.away + ' @ ' + g.home + '? This also removes every pick on it.')){
+        state.games = state.games.filter(function(x){ return x.id !== gid; });
+        state.wagers = state.wagers.filter(function(x){ return x.gameId !== gid; });
+        save('Game deleted.');
+      }
+    } else if(action === 'reopen-game'){
+      var g2 = gameById(el.getAttribute('data-game'));
+      if(g2){ g2.status = 'open'; g2.finalHome = null; g2.finalAway = null; save('Game reopened.'); }
+    } else if(action === 'delete-announcement'){
+      if(!view.isCommissioner) return;
+      var aid = el.getAttribute('data-id');
+      state.announcements = state.announcements.filter(function(a){ return a.id !== aid; });
+      save('Announcement removed.');
+    }
+  });
+
+  document.addEventListener('submit', function(e){
+    var form = e.target.closest('[data-action]');
+    if(!form) return;
+    e.preventDefault();
+    var action = form.getAttribute('data-action');
+    var fd = new FormData(form);
+
+    if(action === 'signup'){
+      var suUsername = normalizeUsername(fd.get('username'));
+      var suTeamName = String(fd.get('teamName')||'').trim();
+      var suFirstName = String(fd.get('firstName')||'').trim();
+      var suLastName = String(fd.get('lastName')||'').trim();
+      var suEmail = String(fd.get('email')||'').trim();
+      var suPassword = String(fd.get('password')||'');
+      var suConfirm = String(fd.get('confirmPassword')||'');
+      if(!suUsername || !suTeamName || !suFirstName || !suLastName || !suEmail || !suPassword){ toast('Please fill in every field.'); return; }
+      if(!/^[a-z0-9_.-]{3,24}$/.test(suUsername)){ toast('Usernames: 3-24 characters, letters/numbers/._- only.'); return; }
+      if(suPassword.length < 6){ toast('Password needs at least 6 characters.'); return; }
+      if(suPassword !== suConfirm){ toast('Passwords don\'t match.'); return; }
+      if(!/^\S+@\S+\.\S+$/.test(suEmail)){ toast('That doesn\'t look like a valid email address.'); return; }
+      if(findPlayer(suUsername)){ toast('That username is taken — try another.'); return; }
+      hashNewPassword(suPassword).then(function(hashed){
+        state.players.push({
+          username: suUsername, salt: hashed.salt, passwordHash: hashed.hash,
+          teamName: suTeamName, firstName: suFirstName, lastName: suLastName, email: suEmail,
+          createdAt: new Date().toISOString()
+        });
+        currentPlayer = suUsername;
+        try{ localStorage.setItem('poolUsername', suUsername); }catch(err){}
+        save('Welcome to the pool, ' + suTeamName + '!');
+      });
+    } else if(action === 'login'){
+      var liUsername = normalizeUsername(fd.get('username'));
+      var liPassword = String(fd.get('password')||'');
+      var profile = findPlayer(liUsername);
+      if(!profile){ toast('No account with that username.'); return; }
+      verifyPassword(liPassword, profile.salt, profile.passwordHash).then(function(ok){
+        if(!ok){ toast('Wrong password.'); return; }
+        currentPlayer = profile.username;
+        try{ localStorage.setItem('poolUsername', profile.username); }catch(err){}
+        render();
+        toast('Welcome back, ' + profile.teamName + '.');
+      });
+    } else if(action === 'save-picks'){
+      var gameId = form.getAttribute('data-game');
+      var g = gameById(gameId);
+      if(!g || !currentPlayer || isLocked(g) || isWeekLockedForPlayer(g, currentPlayer)) return;
+      // Once a market has a submitted wager, it's final -- never overwrite an
+      // existing pick, even if a stale form somehow still posts one (the UI
+      // itself stops rendering an editable field for an already-submitted
+      // market, but this guard is what actually enforces the rule).
+      if(!playerWager(gameId, currentPlayer, 'ATS')) applyPick(gameId, 'ATS', fd.get('ats-pick'), fd.get('ats-points'));
+      if(!playerWager(gameId, currentPlayer, 'OU')) applyPick(gameId, 'OU', fd.get('ou-pick'), fd.get('ou-points'));
+      save('Picks saved.');
+    } else if(action === 'admin-login'){
+      var pin = String(fd.get('pin') || '').trim();
+      if(pin === state.commissionerPin){
+        view.isCommissioner = true;
+        try{ localStorage.setItem('poolIsCommissioner', 'yes'); }catch(err){}
+        render();
+      } else {
+        toast('Wrong PIN.');
+      }
+    } else if(action === 'save-game'){
+      var editId = form.getAttribute('data-editing');
+      var data = {
+        sport: fd.get('sport'),
+        week: String(fd.get('week')||'').trim() || 'Week 1',
+        away: String(fd.get('away')||'').trim(),
+        home: String(fd.get('home')||'').trim(),
+        favorite: fd.get('favorite'),
+        spread: Math.abs(parseFloat(fd.get('spread'))) || 0,
+        total: parseFloat(fd.get('total')) || 0,
+        kickoff: fd.get('kickoff') || null
+      };
+      if(!data.away || !data.home) return;
+      if(editId){
+        var g3 = gameById(editId);
+        if(g3) Object.assign(g3, data);
+        view.editingGameId = null;
+        save('Game updated.');
+      } else {
+        data.id = uid();
+        data.status = 'open';
+        data.finalHome = null;
+        data.finalAway = null;
+        data.order = state.games.length;
+        state.games.push(data);
+        save('Game added.');
+      }
+    } else if(action === 'settle-game'){
+      var gid2 = form.getAttribute('data-game');
+      var g4 = gameById(gid2);
+      var fa = parseInt(fd.get('finalAway'), 10);
+      var fh = parseInt(fd.get('finalHome'), 10);
+      if(!g4 || isNaN(fa) || isNaN(fh)) return;
+      g4.finalAway = fa;
+      g4.finalHome = fh;
+      g4.status = 'final';
+      save('Final score posted — results updated.');
+    } else if(action === 'save-settings'){
+      state.poolName = String(fd.get('poolName')||'').trim() || state.poolName;
+      var sb = parseInt(fd.get('startingBalance'), 10);
+      if(!isNaN(sb)) state.startingBalance = sb;
+      var newPin = String(fd.get('commissionerPin')||'').trim();
+      if(newPin) state.commissionerPin = newPin;
+      document.title = state.poolName;
+      save('Settings saved.');
+    } else if(action === 'compose-email'){
+      if(!view.isCommissioner) return;
+      var recipients = playersWithEmail().map(function(p){ return p.email; });
+      if(!recipients.length) return;
+      var subject = String(fd.get('subject')||'').trim();
+      var body = String(fd.get('body')||'');
+      var mailto = 'mailto:?bcc=' + encodeURIComponent(recipients.join(',')) +
+        '&subject=' + encodeURIComponent(subject) +
+        '&body=' + encodeURIComponent(body);
+      window.location.href = mailto;
+    } else if(action === 'save-rules'){
+      if(!view.isCommissioner) return;
+      state.rulesText = String(fd.get('rulesText') || '');
+      save('Rules saved.');
+    } else if(action === 'adjust-balance'){
+      if(!view.isCommissioner) return;
+      var adjPlayer = String(fd.get('player') || '');
+      var adjAmount = parseInt(fd.get('amount'), 10);
+      var adjNote = String(fd.get('note') || '').trim();
+      if(!adjPlayer || rosterUsernames().indexOf(adjPlayer) === -1 || !adjAmount) return;
+      state.adjustments.push({ id: uid(), player: adjPlayer, amount: adjAmount, note: adjNote, ts: Date.now() });
+      save('Adjusted ' + displayName(adjPlayer) + '\'s balance by ' + (adjAmount>0?'+':'') + adjAmount + '.');
+    } else if(action === 'post-announcement'){
+      if(!view.isCommissioner) return;
+      var msg = String(fd.get('text')||'').trim();
+      if(!msg) return;
+      state.announcements.push({ id: uid(), text: msg, postedAt: new Date().toISOString() });
+      save('Posted to the board.');
+    }
+  });
+
+  function applyPick(gameId, type, pick, pointsRaw){
+    // A player gets at most ONE wager per game per market (ATS or OU) --
+    // never one on each side of the same market. Clearing every existing
+    // match before (maybe) adding the new one makes that a hard guarantee
+    // regardless of how many matches happen to exist already, rather than
+    // trusting a single previously-found index.
+    state.wagers = state.wagers.filter(function(w){
+      return !(w.gameId === gameId && w.player === currentPlayer && w.type === type);
+    });
+    var points = parseInt(pointsRaw, 10);
+    if(!pick || !points || points <= 0) return;
+    state.wagers.push({ id: uid(), gameId: gameId, player: currentPlayer, type: type, pick: pick, points: points });
+  }
+
+  // ---------- init ----------
+  function init(){
+    document.title = state.poolName;
+    if(window.claude && typeof window.claude.use === 'function'){
+      window.claude.use('artifact').then(function(cap){
+        artifactCap = cap;
+        if(!cap && !warnedNoCap){ warnedNoCap = true; toast('Live saving isn\'t available in this view — changes will only last this session.', 4500); }
+      });
+      window.claude.use('downloads').then(function(cap){ downloadsCap = cap; });
+    }
+    render();
+  }
+  init();
+})();
+</script>
