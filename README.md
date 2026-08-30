@@ -101,7 +101,8 @@ how the app works, hand it to someone else, or rebuild it elsewhere.
 - The **Under-wagered this week** report compares each player's wagers
   against half of the balance they had at the *start* of the current week
   — a game that already went final mid-week doesn't retroactively move the
-  bar.
+  bar. Click the **Status** column header to flip it between most-short-first
+  (the default) and least-short-first.
 
 ## Odds sync
 

@@ -151,6 +151,8 @@
   table.board td{ padding:10px 14px; border-bottom:1px solid var(--line); vertical-align:middle; }
   table.board tr:last-child td{ border-bottom:none; }
   table.board td.num, table.board th.num{ font-family:Arial,Helvetica,sans-serif; text-align:right; }
+  .sortable-th{ font:inherit; letter-spacing:inherit; text-transform:inherit; color:inherit; background:none; border:none; padding:0; cursor:pointer; }
+  .sortable-th:hover{ color:var(--text); }
   .rank{ color:var(--text-dim); }
   .rank.top{ color:var(--accent-strong); font-weight:700; }
   .table-wrap{ overflow-x:auto; }
@@ -1426,7 +1428,8 @@
     authMode: 'signup',
     resetVerifiedUsername: null,
     voidPickFilter: '',
-    sportFilter: ''
+    sportFilter: '',
+    complianceSortAsc: false
   };
 
   // Migrate pre-account rosters (plain name strings) out of state.players --
@@ -1775,10 +1778,18 @@
     if(!rows.length){
       return '<div class="card">' + head + sub + '<div class="empty" style="border:none">Everyone has wagered at least half their points this week.</div></div>';
     }
+    // halfPointsReport() itself always returns most-short-first -- re-sort
+    // here so the Status column header can flip the direction without
+    // touching the report's own default ordering for anything else.
+    rows = rows.slice().sort(function(a, b){
+      return view.complianceSortAsc ? (a.shortBy - b.shortBy) : (b.shortBy - a.shortBy);
+    });
     var body = rows.map(function(r){
       return '<tr><td>' + esc(r.team) + '</td><td class="num mono">' + r.balance + '</td><td class="num mono">' + fmtHalf(r.required) + '</td><td class="num mono">' + r.wagered + '</td><td class="num"><span class="result-pill loss">short ' + fmtHalf(r.shortBy) + '</span></td></tr>';
     }).join('');
-    return '<div class="card">' + head + sub + '<div class="table-wrap"><table class="board"><thead><tr><th>Team</th><th class="num">Week-start balance</th><th class="num">Half</th><th class="num">Wagered</th><th class="num">Status</th></tr></thead><tbody>' + body + '</tbody></table></div></div>';
+    var sortArrow = view.complianceSortAsc ? '▲' : '▼';
+    var statusHeader = '<th class="num"><button type="button" class="sortable-th" data-action="toggle-compliance-sort">Status ' + sortArrow + '</button></th>';
+    return '<div class="card">' + head + sub + '<div class="table-wrap"><table class="board"><thead><tr><th>Team</th><th class="num">Week-start balance</th><th class="num">Half</th><th class="num">Wagered</th>' + statusHeader + '</tr></thead><tbody>' + body + '</tbody></table></div></div>';
   }
 
   function renderBalanceAdjustCard(){
@@ -2467,6 +2478,9 @@
       render();
     } else if(action === 'set-sport-filter'){
       view.sportFilter = el.getAttribute('data-sport');
+      render();
+    } else if(action === 'toggle-compliance-sort'){
+      view.complianceSortAsc = !view.complianceSortAsc;
       render();
     } else if(action === 'edit-game'){
       view.editingGameId = el.getAttribute('data-game');

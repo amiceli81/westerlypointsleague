@@ -114,6 +114,48 @@ function toLocalInputValue(d) {
     throw new Error('FAIL: Team Charlie row incorrect: ' + JSON.stringify(charlieRow));
   }
 
+  // --- Status column should be sortable, defaulting to most-short-first ---
+  function complianceTeamOrder() {
+    return page.evaluate(() => {
+      const h3s = Array.from(document.querySelectorAll('.section-title h3'));
+      const target = h3s.find(h => h.textContent.includes('Under-wagered'));
+      const card = target.closest('.card');
+      return Array.from(card.querySelectorAll('table.board tbody tr')).map(tr => tr.querySelector('td').textContent.trim());
+    });
+  }
+
+  let order = await complianceTeamOrder();
+  console.log('Default compliance order (should be most-short-first, Charlie then Bravo):', order);
+  if (order.indexOf('Team Charlie') === -1 || order.indexOf('Team Bravo') === -1 || order.indexOf('Team Charlie') > order.indexOf('Team Bravo')) {
+    throw new Error('FAIL: expected Team Charlie (short 500) before Team Bravo (short 400) by default, got: ' + JSON.stringify(order));
+  }
+
+  const sortButton = page.locator('button[data-action="toggle-compliance-sort"]');
+  if (await sortButton.count() !== 1) throw new Error('FAIL: expected a sortable Status column header');
+  let arrowText = await sortButton.innerText();
+  if (!arrowText.includes('▼')) throw new Error('FAIL: expected the default sort arrow to point down (descending), got: ' + arrowText);
+
+  await sortButton.click();
+  await page.waitForTimeout(150);
+  arrowText = await sortButton.innerText();
+  if (!arrowText.includes('▲')) throw new Error('FAIL: expected the arrow to flip to ascending after one click, got: ' + arrowText);
+  order = await complianceTeamOrder();
+  console.log('Ascending compliance order (should be least-short-first, Bravo then Charlie):', order);
+  if (order.indexOf('Team Bravo') === -1 || order.indexOf('Team Charlie') === -1 || order.indexOf('Team Bravo') > order.indexOf('Team Charlie')) {
+    throw new Error('FAIL: expected Team Bravo (short 400) before Team Charlie (short 500) after sorting ascending, got: ' + JSON.stringify(order));
+  }
+  console.log('PASS: clicking the Status header flips to ascending order');
+
+  await sortButton.click();
+  await page.waitForTimeout(150);
+  arrowText = await sortButton.innerText();
+  if (!arrowText.includes('▼')) throw new Error('FAIL: expected the arrow to flip back to descending after a second click, got: ' + arrowText);
+  order = await complianceTeamOrder();
+  if (order.indexOf('Team Charlie') > order.indexOf('Team Bravo')) {
+    throw new Error('FAIL: expected descending order (Charlie before Bravo) after clicking again, got: ' + JSON.stringify(order));
+  }
+  console.log('PASS: clicking again flips back to descending order');
+
   console.log('ALL COMPLIANCE TESTS PASSED');
   await browser.close();
 })().catch(async (e) => { console.error('TEST FAILED:', e.message); process.exit(1); });
