@@ -1931,8 +1931,13 @@
     var head = '<div class="section-title"><h3>Pool rules</h3></div>';
     if(view.isCommissioner){
       var sub = '<p class="eyebrow" style="margin:-6px 0 12px">Visible to everyone in the pool. Edit below and save when you\'re done.</p>';
+      // The commissioner PIN is required again right here on Save -- not
+      // just gated on the sticky isCommissioner flag -- so saving a rules
+      // change always needs the PIN typed at that moment, even on a device
+      // that's already unlocked from a prior Commissioner-tab session.
       var form = '<form class="panel" data-action="save-rules">' +
         '<textarea name="rulesText" class="rules-textarea" placeholder="Type out the pool\'s rules here…">' + esc(state.rulesText) + '</textarea>' +
+        '<div class="field" style="margin-top:12px"><label>Commissioner PIN</label><input class="mono" name="pin" placeholder="PIN" required></div>' +
         '<div class="pick-actions"><button class="btn" type="submit">Save rules</button></div>' +
         '</form>';
       return '<div class="card">' + head + sub + form + '</div>';
@@ -2556,6 +2561,8 @@
       window.location.href = mailto;
     } else if(action === 'save-rules'){
       if(!view.isCommissioner) return;
+      var rulesPin = String(fd.get('pin') || '').trim();
+      if(rulesPin !== state.commissionerPin){ toast('Wrong PIN.'); return; }
       state.rulesText = String(fd.get('rulesText') || '');
       save('Rules saved.');
     } else if(action === 'adjust-balance'){

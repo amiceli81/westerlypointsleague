@@ -31,6 +31,26 @@ const { chromium } = require('playwright');
 
   const ruleBody = 'Line one: no picking after kickoff.\nLine two: <script>alert(1)</script> stays literal text.\nLine three: ties push.';
   await rulesTextarea.fill(ruleBody);
+
+  // Wrong PIN on the save-rules form itself should be rejected, even though
+  // this browser is already unlocked as commissioner.
+  await page.fill('form[data-action="save-rules"] input[name="pin"]', '0000');
+  await page.click('form[data-action="save-rules"] button[type="submit"]');
+  await page.waitForTimeout(200);
+
+  // Confirm the wrong-PIN attempt never actually reached state (not just that
+  // the unsubmitted DOM textarea still shows what was typed): switch away and
+  // back, which re-renders the tab from state.rulesText.
+  await page.click('button[data-action="set-tab"][data-tab="week"]');
+  await page.waitForTimeout(100);
+  await page.click('button[data-action="set-tab"][data-tab="rules"]');
+  await page.waitForTimeout(100);
+  const rejectedValue = await page.locator('textarea[name="rulesText"]').inputValue();
+  if (rejectedValue === ruleBody) throw new Error('FAIL: a save-rules submission with the wrong PIN should not have been saved to state, but it was.');
+
+  // Correct PIN should save it.
+  await page.locator('textarea[name="rulesText"]').fill(ruleBody);
+  await page.fill('form[data-action="save-rules"] input[name="pin"]', '1234');
   await page.click('form[data-action="save-rules"] button[type="submit"]');
   await page.waitForTimeout(200);
 
