@@ -119,6 +119,40 @@ function toLocalInputValue(d) {
   const stillThere = await page.locator('button[data-action="close-player-picks"]').count();
   if (stillThere !== 0) throw new Error('FAIL: expected the player picks card to close');
 
+  // --- Log back in as the player themself: their OWN picks should show
+  // even on the still-open game, unlike the anonymous-visitor view above. ---
+  await page.click('button[data-action="goto-auth"]');
+  await page.waitForTimeout(150);
+  await page.click('button[data-action="auth-mode"][data-mode="login"]');
+  await page.fill('form[data-action="login"] input[name="username"]', 'playerpicks');
+  await page.fill('form[data-action="login"] input[name="password"]', 'password1');
+  await page.click('form[data-action="login"] button[type="submit"]');
+  await page.waitForTimeout(200);
+
+  await page.click('button[data-action="set-tab"][data-tab="leaderboard"]');
+  await page.waitForTimeout(150);
+  const ownLink = page.locator('button[data-action="view-player"]', { hasText: 'Team Player Picks' });
+  await ownLink.click();
+  await page.waitForTimeout(150);
+
+  const ownCardText = await page.evaluate(() => {
+    const h3s = Array.from(document.querySelectorAll('.section-title h3'));
+    const target = h3s.find(h => h.textContent.includes('Team Player Picks') && h.textContent.includes('picks'));
+    return target ? target.closest('.card').textContent : null;
+  });
+  console.log('Own picks card text (should include the still-open game):', ownCardText);
+  if (!ownCardText) throw new Error('FAIL: expected a picks card when viewing your own name');
+  if (!ownCardText.includes('Locked Away') || !ownCardText.includes('Locked Home')) {
+    throw new Error('FAIL: expected the locked game\'s pick to still show in your own view, got: ' + ownCardText);
+  }
+  if (!ownCardText.includes('Open Away') || !ownCardText.includes('Open Home')) {
+    throw new Error('FAIL: expected the still-open game\'s pick to show when viewing your OWN picks, got: ' + ownCardText);
+  }
+  if (!ownCardText.includes('177') || !ownCardText.includes('133')) {
+    throw new Error('FAIL: expected both wager amounts (177 and 133) to show in your own picks, got: ' + ownCardText);
+  }
+  console.log('PASS: viewing your own name reveals picks on games that haven\'t started yet');
+
   console.log('ALL PLAYER-PICKS-FROM-LEADERBOARD TESTS PASSED');
   await browser.close();
 })().catch(e => { console.error('TEST FAILED:', e.message); process.exit(1); });

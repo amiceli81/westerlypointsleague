@@ -46,7 +46,8 @@ how the app works, hand it to someone else, or rebuild it elsewhere.
   composer, week-level pick locking (including a stale-page race where a
   form rendered just before lock still tries to submit), hiding upcoming
   weeks until their dates arrive, viewing another player's picks once a
-  game locks, the collapsible admin games list, commissioner balance
+  game locks (but viewing your OWN picks always works, even before a game
+  starts), the collapsible admin games list, commissioner balance
   adjustments, hiding locked games from the This Week tab by default, the
   Rules tab (including its PIN gate), self-service password reset, the
   minimum-wager enforcement and a weekly wager budget (a player's combined

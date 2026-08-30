@@ -1187,18 +1187,22 @@
   }
 
   function renderPlayerPicksCard(username){
-    // Anyone can drill into any player's picks from the leaderboard, but only
-    // for games that have already kicked off (or gone final) -- same privacy
-    // boundary as the All Picks tab, so this never leaks a still-open pick.
+    // Anyone can drill into any OTHER player's picks from the leaderboard,
+    // but only for games that have already kicked off (or gone final) --
+    // same privacy boundary as the All Picks tab, so this never leaks a
+    // still-open pick. That restriction doesn't apply to your OWN picks --
+    // nobody else's privacy is at stake in seeing what you already know.
+    var isOwnPicks = username === currentPlayer;
     var name = displayName(username);
     var wagers = state.wagers.filter(function(w){
       if(w.player !== username) return false;
+      if(isOwnPicks) return true;
       var g = gameById(w.gameId);
       return g && isLocked(g);
     });
     var head = '<div class="section-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><h3>' + esc(name) + '’s picks</h3><button type="button" class="btn ghost" data-action="close-player-picks">Close</button></div>';
     if(!wagers.length){
-      return '<div class="card">' + head + '<div class="empty" style="border:none">No picks yet on games that have started.</div></div>';
+      return '<div class="card">' + head + '<div class="empty" style="border:none">' + (isOwnPicks ? 'No picks placed yet.' : 'No picks yet on games that have started.') + '</div></div>';
     }
     wagers = wagers.slice().sort(function(a,b){
       var ga = gameById(a.gameId), gb = gameById(b.gameId);
