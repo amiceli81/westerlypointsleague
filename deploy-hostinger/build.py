@@ -177,8 +177,52 @@ def main():
         "  var artifactCap = null;\n"
         "  var warnedNoCap = false;\n"
         "  var downloadsCap = null;",
-        "  var warnedNoCap = false;",
+        "  var warnedNoCap = false;\n"
+        "  // Players/wagers created locally (signup, placing a pick) that haven't\n"
+        "  // been confirmed saved to the server yet. Replayed on top of whatever\n"
+        "  // the server returns on the initial load or a save conflict, so a brand\n"
+        "  // new account or pick never gets silently wiped out by a fetch that\n"
+        "  // resolves (or a version conflict) before it made it to the database.\n"
+        "  var pendingAdditions = { players: [], wagers: [] };",
         'the capability-holder variables',
+    )
+
+    script = replace_once(
+        script,
+        "      hashNewPassword(suPassword).then(function(hashed){\n"
+        "        state.players.push({\n"
+        "          username: suUsername, salt: hashed.salt, passwordHash: hashed.hash,\n"
+        "          teamName: suTeamName, firstName: suFirstName, lastName: suLastName, email: suEmail,\n"
+        "          createdAt: new Date().toISOString()\n"
+        "        });\n"
+        "        currentPlayer = suUsername;\n"
+        "        try{ localStorage.setItem('poolUsername', suUsername); }catch(err){}\n"
+        "        save('Welcome to the pool, ' + suTeamName + '!');\n",
+        "      hashNewPassword(suPassword).then(function(hashed){\n"
+        "        var newPlayer = {\n"
+        "          username: suUsername, salt: hashed.salt, passwordHash: hashed.hash,\n"
+        "          teamName: suTeamName, firstName: suFirstName, lastName: suLastName, email: suEmail,\n"
+        "          createdAt: new Date().toISOString()\n"
+        "        };\n"
+        "        state.players.push(newPlayer);\n"
+        "        pendingAdditions.players.push(newPlayer);\n"
+        "        currentPlayer = suUsername;\n"
+        "        try{ localStorage.setItem('poolUsername', suUsername); }catch(err){}\n"
+        "        save('Welcome to the pool, ' + suTeamName + '!');\n",
+        'the signup handler (track the new player as a pending addition)',
+    )
+
+    script = replace_once(
+        script,
+        "    if(!pick || !points || points <= 0) return;\n"
+        "    state.wagers.push({ id: uid(), gameId: gameId, player: currentPlayer, type: type, pick: pick, points: points });\n"
+        "  }",
+        "    if(!pick || !points || points <= 0) return;\n"
+        "    var newWager = { id: uid(), gameId: gameId, player: currentPlayer, type: type, pick: pick, points: points };\n"
+        "    state.wagers.push(newWager);\n"
+        "    pendingAdditions.wagers.push(newWager);\n"
+        "  }",
+        'applyPick (track the new wager as a pending addition)',
     )
 
     script = replace_once(
@@ -223,9 +267,29 @@ def main():
         "      return false;\n"
         "    });\n"
         "  }",
+        "  // Layers players/wagers created locally but not yet confirmed saved\n"
+        "  // (see pendingAdditions) on top of a fresh copy of state fetched from\n"
+        "  // the server, so a signup or a pick made just before the initial load\n"
+        "  // resolves -- or one that lost a save-conflict race -- doesn't just\n"
+        "  // vanish the moment the server's copy replaces the local one.\n"
+        "  function applyPendingAdditions(remote){\n"
+        "    var remoteUsernames = {};\n"
+        "    remote.players.forEach(function(p){ remoteUsernames[p.username] = true; });\n"
+        "    pendingAdditions.players.forEach(function(p){\n"
+        "      if(!remoteUsernames[p.username]){ remote.players.push(p); remoteUsernames[p.username] = true; }\n"
+        "    });\n"
+        "    var remoteWagerIds = {};\n"
+        "    remote.wagers.forEach(function(w){ remoteWagerIds[w.id] = true; });\n"
+        "    pendingAdditions.wagers.forEach(function(w){\n"
+        "      if(!remoteWagerIds[w.id]){ remote.wagers.push(w); remoteWagerIds[w.id] = true; }\n"
+        "    });\n"
+        "    return remote;\n"
+        "  }\n"
+        "\n"
         "  var saving = false;\n"
-        "  function save(successMsg){\n"
+        "  function save(successMsg, retriesLeft){\n"
         "    render();\n"
+        "    if(retriesLeft === undefined) retriesLeft = 2;\n"
         "    if(serverVersion === null){\n"
         "      if(!warnedNoCap){ warnedNoCap = true; toast('Live saving isn\\'t available right now — changes will only last this session.', 4500); }\n"
         "      return Promise.resolve(false);\n"
@@ -242,16 +306,22 @@ def main():
         "      saving = false;\n"
         "      if(result.status === 200){\n"
         "        serverVersion = result.body.version;\n"
+        "        pendingAdditions = { players: [], wagers: [] };\n"
         "        if(successMsg) toast(successMsg);\n"
         "        return true;\n"
         "      }\n"
         "      if(result.status === 409){\n"
-        "        // Someone else saved since we last loaded -- adopt their version\n"
-        "        // rather than clobbering it, same as the Claude Artifact's own\n"
-        "        // conflict handling never force-overwrites.\n"
-        "        state = normalizeState(result.body.data);\n"
+        "        // Someone else saved since we last loaded -- rebase onto their\n"
+        "        // version instead of clobbering it, but replay anything of ours\n"
+        "        // that hasn't been confirmed saved yet (a signup, a pick) so it\n"
+        "        // isn't silently lost, then retry a bounded number of times in\n"
+        "        // case of a fast back-to-back conflict.\n"
+        "        state = applyPendingAdditions(normalizeState(result.body.data));\n"
         "        serverVersion = result.body.version;\n"
         "        render();\n"
+        "        if(retriesLeft > 0){\n"
+        "          return save(successMsg, retriesLeft - 1);\n"
+        "        }\n"
         "        toast('Someone else just saved a change — reloading with the latest board…');\n"
         "        return false;\n"
         "      }\n"
@@ -345,7 +415,14 @@ def main():
         "      if(!res.ok) throw new Error('bad status ' + res.status);\n"
         "      return res.json();\n"
         "    }).then(function(body){\n"
-        "      state = normalizeState(body.data);\n"
+        "      // A signup or pick made in the moment between the page painting and\n"
+        "      // this fetch resolving would otherwise be silently erased by the\n"
+        "      // plain server copy replacing `state` below -- replay it on top\n"
+        "      // instead, then get it actually saved now that the real version is\n"
+        "      // known (save() bails out with only a 'this session only' warning\n"
+        "      // until serverVersion is set, which is exactly this line).\n"
+        "      var hadPending = pendingAdditions.players.length > 0 || pendingAdditions.wagers.length > 0;\n"
+        "      state = applyPendingAdditions(normalizeState(body.data));\n"
         "      serverVersion = body.version;\n"
         "      // Only now, against the server's actual current player list, is it\n"
         "      // safe to decide whether a saved login is still valid.\n"
@@ -355,6 +432,7 @@ def main():
         "      }\n"
         "      document.title = state.poolName;\n"
         "      render();\n"
+        "      if(hadPending) save();\n"
         "    }).catch(function(){\n"
         "      toast('Could not reach the server — showing a cached copy. Live saving is unavailable until this is fixed.', 6000);\n"
         "    });\n"

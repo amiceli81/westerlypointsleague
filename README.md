@@ -41,7 +41,7 @@ how the app works, hand it to someone else, or rebuild it elsewhere.
   tends to get paraphrased or summarized. See its module docstring for the
   expected input shape.
 
-- **tests/** — a Playwright regression suite (16 files) covering: duplicate
+- **tests/** — a Playwright regression suite (17 files) covering: duplicate
   pick prevention, the under-wagered compliance report, the email/mailto
   composer, week-level pick locking (including a stale-page race where a
   form rendered just before lock still tries to submit), hiding upcoming
@@ -50,7 +50,8 @@ how the app works, hand it to someone else, or rebuild it elsewhere.
   adjustments, hiding locked games from the This Week tab by default, the
   Rules tab (including its PIN gate), self-service password reset, the
   minimum-wager enforcement, voiding a pick, the void-picks player filter,
-  and the This Week sport filter. Each test drives a full in-memory copy of
+  the This Week sport filter, and rejecting a duplicate team name at signup.
+  Each test drives a full in-memory copy of
   the app in a headless browser — none of them touch the live artifact.
   `tests/build_test_full.py` wraps `pool.html` in a minimal `<html>` shell
   so it can be opened directly by a browser for testing; run it once before

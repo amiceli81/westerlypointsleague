@@ -2605,6 +2605,7 @@
       if(suPassword !== suConfirm){ toast('Passwords don\'t match.'); return; }
       if(!/^\S+@\S+\.\S+$/.test(suEmail)){ toast('That doesn\'t look like a valid email address.'); return; }
       if(findPlayer(suUsername)){ toast('That username is taken — try another.'); return; }
+      if(state.players.some(function(p){ return p.teamName.trim().toLowerCase() === suTeamName.toLowerCase(); })){ toast('That team name is already taken — try another.'); return; }
       hashNewPassword(suPassword).then(function(hashed){
         state.players.push({
           username: suUsername, salt: hashed.salt, passwordHash: hashed.hash,

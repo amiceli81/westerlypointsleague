@@ -260,6 +260,12 @@
   // `state` with the server's current copy.
 
   var warnedNoCap = false;
+  // Players/wagers created locally (signup, placing a pick) that haven't
+  // been confirmed saved to the server yet. Replayed on top of whatever
+  // the server returns on the initial load or a save conflict, so a brand
+  // new account or pick never gets silently wiped out by a fetch that
+  // resolves (or a version conflict) before it made it to the database.
+  var pendingAdditions = { players: [], wagers: [] };
 
   function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4); }
 
@@ -720,9 +726,29 @@
     setTimeout(function(){ el.remove(); }, ms || 3400);
   }
 
+  // Layers players/wagers created locally but not yet confirmed saved
+  // (see pendingAdditions) on top of a fresh copy of state fetched from
+  // the server, so a signup or a pick made just before the initial load
+  // resolves -- or one that lost a save-conflict race -- doesn't just
+  // vanish the moment the server's copy replaces the local one.
+  function applyPendingAdditions(remote){
+    var remoteUsernames = {};
+    remote.players.forEach(function(p){ remoteUsernames[p.username] = true; });
+    pendingAdditions.players.forEach(function(p){
+      if(!remoteUsernames[p.username]){ remote.players.push(p); remoteUsernames[p.username] = true; }
+    });
+    var remoteWagerIds = {};
+    remote.wagers.forEach(function(w){ remoteWagerIds[w.id] = true; });
+    pendingAdditions.wagers.forEach(function(w){
+      if(!remoteWagerIds[w.id]){ remote.wagers.push(w); remoteWagerIds[w.id] = true; }
+    });
+    return remote;
+  }
+
   var saving = false;
-  function save(successMsg){
+  function save(successMsg, retriesLeft){
     render();
+    if(retriesLeft === undefined) retriesLeft = 2;
     if(serverVersion === null){
       if(!warnedNoCap){ warnedNoCap = true; toast('Live saving isn\'t available right now — changes will only last this session.', 4500); }
       return Promise.resolve(false);
@@ -739,16 +765,22 @@
       saving = false;
       if(result.status === 200){
         serverVersion = result.body.version;
+        pendingAdditions = { players: [], wagers: [] };
         if(successMsg) toast(successMsg);
         return true;
       }
       if(result.status === 409){
-        // Someone else saved since we last loaded -- adopt their version
-        // rather than clobbering it, same as the Claude Artifact's own
-        // conflict handling never force-overwrites.
-        state = normalizeState(result.body.data);
+        // Someone else saved since we last loaded -- rebase onto their
+        // version instead of clobbering it, but replay anything of ours
+        // that hasn't been confirmed saved yet (a signup, a pick) so it
+        // isn't silently lost, then retry a bounded number of times in
+        // case of a fast back-to-back conflict.
+        state = applyPendingAdditions(normalizeState(result.body.data));
         serverVersion = result.body.version;
         render();
+        if(retriesLeft > 0){
+          return save(successMsg, retriesLeft - 1);
+        }
         toast('Someone else just saved a change — reloading with the latest board…');
         return false;
       }
@@ -1418,12 +1450,15 @@
       if(suPassword !== suConfirm){ toast('Passwords don\'t match.'); return; }
       if(!/^\S+@\S+\.\S+$/.test(suEmail)){ toast('That doesn\'t look like a valid email address.'); return; }
       if(findPlayer(suUsername)){ toast('That username is taken — try another.'); return; }
+      if(state.players.some(function(p){ return p.teamName.trim().toLowerCase() === suTeamName.toLowerCase(); })){ toast('That team name is already taken — try another.'); return; }
       hashNewPassword(suPassword).then(function(hashed){
-        state.players.push({
+        var newPlayer = {
           username: suUsername, salt: hashed.salt, passwordHash: hashed.hash,
           teamName: suTeamName, firstName: suFirstName, lastName: suLastName, email: suEmail,
           createdAt: new Date().toISOString()
-        });
+        };
+        state.players.push(newPlayer);
+        pendingAdditions.players.push(newPlayer);
         currentPlayer = suUsername;
         try{ localStorage.setItem('poolUsername', suUsername); }catch(err){}
         save('Welcome to the pool, ' + suTeamName + '!');
@@ -1593,7 +1628,9 @@
     });
     var points = parseInt(pointsRaw, 10);
     if(!pick || !points || points <= 0) return;
-    state.wagers.push({ id: uid(), gameId: gameId, player: currentPlayer, type: type, pick: pick, points: points });
+    var newWager = { id: uid(), gameId: gameId, player: currentPlayer, type: type, pick: pick, points: points };
+    state.wagers.push(newWager);
+    pendingAdditions.wagers.push(newWager);
   }
 
   // ---------- init ----------
@@ -1608,7 +1645,14 @@
       if(!res.ok) throw new Error('bad status ' + res.status);
       return res.json();
     }).then(function(body){
-      state = normalizeState(body.data);
+      // A signup or pick made in the moment between the page painting and
+      // this fetch resolving would otherwise be silently erased by the
+      // plain server copy replacing `state` below -- replay it on top
+      // instead, then get it actually saved now that the real version is
+      // known (save() bails out with only a 'this session only' warning
+      // until serverVersion is set, which is exactly this line).
+      var hadPending = pendingAdditions.players.length > 0 || pendingAdditions.wagers.length > 0;
+      state = applyPendingAdditions(normalizeState(body.data));
       serverVersion = body.version;
       // Only now, against the server's actual current player list, is it
       // safe to decide whether a saved login is still valid.
@@ -1618,6 +1662,7 @@
       }
       document.title = state.poolName;
       render();
+      if(hadPending) save();
     }).catch(function(){
       toast('Could not reach the server — showing a cached copy. Live saving is unavailable until this is fixed.', 6000);
     });
