@@ -2400,7 +2400,15 @@
       // weekStartBalanceForGame()/weekWageredSoFar(). "remaining" is what's
       // left of that weekly budget for a new wager on this game.
       var weekBudget = weekStartBalanceForGame(currentPlayer, g);
-      var remaining = Math.max(0, weekBudget - weekWageredSoFar(currentPlayer, g));
+      var alreadyWageredHint = weekWageredSoFar(currentPlayer, g);
+      var remaining = Math.max(0, weekBudget - alreadyWageredHint);
+      // Same half-of-week-start-balance threshold the compliance report
+      // flags people under -- shown here too so a player can see how close
+      // they are to it while they're still picking, not just after the fact.
+      var halfNeeded = Math.max(0, (weekBudget / 2) - alreadyWageredHint);
+      var halfNote = halfNeeded > 0
+        ? ' You still need to wager ' + fmtHalf(halfNeeded) + ' more pts to reach half your starting balance.'
+        : ' You\'ve already wagered at least half your starting balance this week.';
       var openBlocks = '';
       if(!atsW){
         openBlocks += '<div class="pick-block"><span class="label">ATS</span>' +
@@ -2418,7 +2426,7 @@
       }
       // novalidate so the browser's own constraint bubble never pre-empts
       // our own "You must wager at least MIN_WAGER points." popup below.
-      var formBlock = openBlocks ? '<form class="pick-form" data-action="save-picks" data-game="' + g.id + '" novalidate>' + openBlocks + '<p class="eyebrow" style="margin:6px 0 0">Picks lock in once submitted and can\'t be changed. You have ' + fmtNum(remaining) + ' pts left to wager this week (started the week with ' + fmtNum(weekBudget) + ').</p><div class="pick-actions"><button class="btn" type="submit">Save picks</button></div></form>' : '';
+      var formBlock = openBlocks ? '<form class="pick-form" data-action="save-picks" data-game="' + g.id + '" novalidate>' + openBlocks + '<p class="eyebrow" style="margin:6px 0 0">Picks lock in once submitted and can\'t be changed. You have ' + fmtNum(remaining) + ' pts left to wager this week (started the week with ' + fmtNum(weekBudget) + ').' + halfNote + '</p><div class="pick-actions"><button class="btn" type="submit">Save picks</button></div></form>' : '';
 
       body = lockedBlock + formBlock;
     }

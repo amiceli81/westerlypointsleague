@@ -60,8 +60,12 @@ how the app works, hand it to someone else, or rebuild it elsewhere.
   (default-collapsed) Void a Pick list, booting a player's account (and
   their wagers), per-player paid/buy-back/pay-type tracking (in the Boot
   a Player card), the leaderboard's CSV export, the void-picks player
-  filter, the This Week sport filter, and rejecting a
-  duplicate team name at signup.
+  filter, the This Week sport filter, rejecting a
+  duplicate team name at signup, the All Picks tab's "Pending Picks"
+  count for games that haven't started, the under-wagered report's
+  per-player wager count (in both the on-page table and its CSV export),
+  and the pick form's reminder of how many more points a player still
+  needs to wager to reach half their starting-week balance.
   Each test drives a full in-memory copy of
   the app in a headless browser — none of them touch the live artifact.
   `tests/build_test_full.py` wraps `pool.html` in a minimal `<html>` shell
