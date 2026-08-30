@@ -1698,18 +1698,34 @@
     return state.startingBalance + net + adj;
   }
 
-  function weekStartBalanceForGame(name, g){
-    // Same "balance at the start of the week" startOfWeekBalance computes
-    // for the compliance report, but scoped to whichever week this specific
-    // game belongs to -- this is the ceiling on a single wager: a player
-    // can't put more points on one pick than they had to their name before
-    // this week's own results could have moved that balance at all.
+  function weekGameIdsFor(g){
     var weekGames = state.games.filter(function(wg){ return wg.sport === g.sport && wg.week === g.week; });
     var gameIds = {};
     weekGames.forEach(function(wg){ gameIds[wg.id] = true; });
-    var kickoffs = weekGames.filter(function(wg){ return wg.kickoff; }).map(function(wg){ return new Date(wg.kickoff); });
+    return { games: weekGames, gameIds: gameIds };
+  }
+
+  function weekStartBalanceForGame(name, g){
+    // Same "balance at the start of the week" startOfWeekBalance computes
+    // for the compliance report, but scoped to whichever week this specific
+    // game belongs to -- this is the total budget for the week: across every
+    // wager a player places this week, combined, they can't risk more points
+    // than they had to their name before this week's own results could have
+    // moved that balance at all.
+    var week = weekGameIdsFor(g);
+    var kickoffs = week.games.filter(function(wg){ return wg.kickoff; }).map(function(wg){ return new Date(wg.kickoff); });
     var weekStart = kickoffs.length ? tuesdayWindowStart(kickoffs.reduce(function(a,b){ return b < a ? b : a; })) : null;
-    return startOfWeekBalance(name, weekStart, gameIds);
+    return startOfWeekBalance(name, weekStart, week.gameIds);
+  }
+
+  function weekWageredSoFar(name, g){
+    // How many points this player has already committed this week (any
+    // game, any market, win/loss/pending all count -- once wagered it's at
+    // risk for the week regardless of when it settles). Subtracted from
+    // weekStartBalanceForGame() to get what's left in the weekly budget.
+    var week = weekGameIdsFor(g);
+    return state.wagers.filter(function(w){ return w.player === name && week.gameIds[w.gameId]; })
+      .reduce(function(sum, w){ return sum + w.points; }, 0);
   }
 
   function halfPointsReport(){
@@ -2255,27 +2271,30 @@
       }
       var lockedBlock = lockedRows ? '<div class="recap">' + lockedRows + '<span class="eyebrow">Submitted picks are locked in and can\'t be changed.</span></div>' : '';
 
-      // Can't wager more on a single pick than the balance this player had
-      // at the start of the week -- see weekStartBalanceForGame().
-      var maxWager = weekStartBalanceForGame(currentPlayer, g);
+      // All of a player's wagers THIS WEEK, combined, can't exceed the
+      // balance they had at the start of the week -- see
+      // weekStartBalanceForGame()/weekWageredSoFar(). "remaining" is what's
+      // left of that weekly budget for a new wager on this game.
+      var weekBudget = weekStartBalanceForGame(currentPlayer, g);
+      var remaining = Math.max(0, weekBudget - weekWageredSoFar(currentPlayer, g));
       var openBlocks = '';
       if(!atsW){
         openBlocks += '<div class="pick-block"><span class="label">ATS</span>' +
           '<label class="opt"><input type="radio" name="ats-pick" value="away"> ' + esc(g.away) + ' ' + fmtLine(awayLine) + '</label>' +
           '<label class="opt"><input type="radio" name="ats-pick" value="home"> ' + esc(g.home) + ' ' + fmtLine(homeLine) + '</label>' +
-          '<input class="pts-input" type="number" min="' + MIN_WAGER + '" max="' + maxWager + '" step="1" name="ats-points" placeholder="pts">' +
+          '<input class="pts-input" type="number" min="' + MIN_WAGER + '" max="' + remaining + '" step="1" name="ats-points" placeholder="pts">' +
           '</div>';
       }
       if(!ouW){
         openBlocks += '<div class="pick-block"><span class="label">O/U</span>' +
           '<label class="opt"><input type="radio" name="ou-pick" value="over"> Over ' + fmtNum(g.total) + '</label>' +
           '<label class="opt"><input type="radio" name="ou-pick" value="under"> Under ' + fmtNum(g.total) + '</label>' +
-          '<input class="pts-input" type="number" min="' + MIN_WAGER + '" max="' + maxWager + '" step="1" name="ou-points" placeholder="pts">' +
+          '<input class="pts-input" type="number" min="' + MIN_WAGER + '" max="' + remaining + '" step="1" name="ou-points" placeholder="pts">' +
           '</div>';
       }
       // novalidate so the browser's own constraint bubble never pre-empts
       // our own "You must wager at least MIN_WAGER points." popup below.
-      var formBlock = openBlocks ? '<form class="pick-form" data-action="save-picks" data-game="' + g.id + '" novalidate>' + openBlocks + '<p class="eyebrow" style="margin:6px 0 0">Picks lock in once submitted and can\'t be changed. Max wager: ' + fmtNum(maxWager) + ' pts (your balance at the start of the week).</p><div class="pick-actions"><button class="btn" type="submit">Save picks</button></div></form>' : '';
+      var formBlock = openBlocks ? '<form class="pick-form" data-action="save-picks" data-game="' + g.id + '" novalidate>' + openBlocks + '<p class="eyebrow" style="margin:6px 0 0">Picks lock in once submitted and can\'t be changed. You have ' + fmtNum(remaining) + ' pts left to wager this week (started the week with ' + fmtNum(weekBudget) + ').</p><div class="pick-actions"><button class="btn" type="submit">Save picks</button></div></form>' : '';
 
       body = lockedBlock + formBlock;
     }
@@ -2719,13 +2738,17 @@
         toast('You must wager at least ' + MIN_WAGER + ' points.');
         return;
       }
-      // Can't wager more on a single pick than the balance this player had
-      // at the start of the week -- checked server-side-of-the-form-handler
-      // (not just the input's max attribute) in case a stale form still
-      // posts a higher value.
-      var maxWagerVal = weekStartBalanceForGame(currentPlayer, g);
-      if((atsPickVal && atsPointsVal > maxWagerVal) || (ouPickVal && ouPointsVal > maxWagerVal)){
-        toast('You can\'t wager more than ' + maxWagerVal + ' points — your balance at the start of the week.');
+      // All of a player's wagers this week, combined (including whatever
+      // they're submitting right now across both markets on this game),
+      // can't exceed the balance they had at the start of the week -- checked
+      // here (not just the inputs' max attributes) in case a stale form
+      // still posts a higher value.
+      var weekBudgetVal = weekStartBalanceForGame(currentPlayer, g);
+      var alreadyWageredVal = weekWageredSoFar(currentPlayer, g);
+      var newWagerTotal = (atsPickVal ? atsPointsVal : 0) + (ouPickVal ? ouPointsVal : 0);
+      if(newWagerTotal > weekBudgetVal - alreadyWageredVal){
+        var remainingVal = Math.max(0, weekBudgetVal - alreadyWageredVal);
+        toast('You only have ' + remainingVal + ' points left to wager this week — your total wagers can\'t exceed your balance at the start of the week.');
         return;
       }
       // Once a market has a submitted wager, it's final -- never overwrite an

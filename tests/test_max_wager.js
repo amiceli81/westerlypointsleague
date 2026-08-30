@@ -45,55 +45,91 @@ function toLocalInputValue(d) {
   await page.click('button[data-action="set-tab"][data-tab="week"]');
   await page.waitForTimeout(150);
 
-  await page.fill('form[data-action="signup"] input[name="username"]', 'maxwageruser');
-  await page.fill('form[data-action="signup"] input[name="teamName"]', 'Max Wager Team');
-  await page.fill('form[data-action="signup"] input[name="firstName"]', 'Max');
-  await page.fill('form[data-action="signup"] input[name="lastName"]', 'Wager');
-  await page.fill('form[data-action="signup"] input[name="email"]', 'maxwager@test.com');
-  await page.fill('form[data-action="signup"] input[name="password"]', 'password1');
-  await page.fill('form[data-action="signup"] input[name="confirmPassword"]', 'password1');
-  await page.click('form[data-action="signup"] button[type="submit"]');
-  await page.waitForTimeout(200);
+  async function signup(username, teamName) {
+    await page.fill('form[data-action="signup"] input[name="username"]', username);
+    await page.fill('form[data-action="signup"] input[name="teamName"]', teamName);
+    await page.fill('form[data-action="signup"] input[name="firstName"]', 'First');
+    await page.fill('form[data-action="signup"] input[name="lastName"]', 'Last');
+    await page.fill('form[data-action="signup"] input[name="email"]', username + '@test.com');
+    await page.fill('form[data-action="signup"] input[name="password"]', 'password1');
+    await page.fill('form[data-action="signup"] input[name="confirmPassword"]', 'password1');
+    await page.click('form[data-action="signup"] button[type="submit"]');
+    await page.waitForTimeout(200);
+  }
+
+  await signup('maxwageruser', 'Max Wager Team');
 
   const cardA = cardFor(teamA);
   const formA = cardA.locator('form[data-action="save-picks"]');
 
   // Fresh signup, no wagers/adjustments -- balance is the pool's starting
-  // balance (1000 in the fixture), so that's the max wager on any one pick.
+  // balance (1000 in the fixture), so that's the weekly budget on the first pick.
   const maxAttr = await formA.locator('input[name="ats-points"]').getAttribute('max');
   if (maxAttr !== '1000') throw new Error('FAIL: expected max="1000" on ats-points input (starting balance), got: ' + maxAttr);
-  console.log('PASS: pts-input max attribute reflects starting balance (1000)');
+  console.log('PASS: pts-input max attribute reflects the full weekly budget (1000) before any wagers');
 
   const hintText = await formA.locator('.eyebrow').last().innerText();
-  if (!/max wager: 1000 pts/i.test(hintText)) throw new Error('FAIL: expected a "Max wager: 1000 pts" hint, got: ' + hintText);
-  console.log('PASS: max-wager hint text shown');
+  if (!/1000 pts left to wager this week/i.test(hintText)) throw new Error('FAIL: expected a "1000 pts left to wager this week" hint, got: ' + hintText);
+  console.log('PASS: remaining-budget hint text shown');
 
-  // Over the max is rejected.
+  // Over the weekly budget is rejected.
   await formA.locator('input[name="ats-pick"]').first().check();
   await formA.locator('input[name="ats-points"]').fill('1001');
   await formA.locator('button[type="submit"]').click();
   await page.waitForTimeout(200);
   let toastText = await page.locator('#toast-root .toast').last().innerText().catch(() => null);
-  console.log('Over-max toast text:', toastText);
-  if (!toastText || !/can't wager more than 1000 points/i.test(toastText)) {
-    throw new Error('FAIL: expected an over-max rejection popup, got: ' + toastText);
+  console.log('Over-budget toast text:', toastText);
+  if (!toastText || !/only have 1000 points left/i.test(toastText)) {
+    throw new Error('FAIL: expected an over-budget rejection popup, got: ' + toastText);
   }
   let stillOpenForm = await cardA.locator('form[data-action="save-picks"]').count();
-  if (stillOpenForm !== 1) throw new Error('FAIL: the over-max wager should not have been saved (form should still be open)');
-  console.log('PASS: over-max wager rejected, form remains open');
+  if (stillOpenForm !== 1) throw new Error('FAIL: the over-budget wager should not have been saved (form should still be open)');
+  console.log('PASS: over-budget wager rejected, form remains open');
 
-  // Exactly the max is accepted.
+  // A PARTIAL wager (700 of the 1000 budget) on teamA is accepted...
   await formA.locator('input[name="ats-pick"]').first().check();
-  await formA.locator('input[name="ats-points"]').fill('1000');
+  await formA.locator('input[name="ats-points"]').fill('700');
   await formA.locator('button[type="submit"]').click();
   await page.waitForTimeout(200);
   const recapText = await cardA.locator('.recap').innerText();
-  if (!/1000 pts/.test(recapText)) throw new Error('FAIL: a 1000-point wager should have been accepted, got: ' + recapText);
-  console.log('PASS: exactly-the-starting-balance wager accepted');
+  if (!/700 pts/.test(recapText)) throw new Error('FAIL: a 700-point wager should have been accepted, got: ' + recapText);
+  console.log('PASS: a wager within the weekly budget is accepted');
 
-  // Place an O/U wager on the "prior week" game, then settle it as a loss --
-  // a result from a DIFFERENT week should feed into this week's max-wager
-  // cap, unlike the pending (still-unsettled) 1000-pt wager just placed above.
+  // ...and it's tracked CUMULATIVELY: teamB (a DIFFERENT game, same week)
+  // should now only allow the remaining 300, not another full 1000.
+  const cardB = cardFor(teamB);
+  const formB = cardB.locator('form[data-action="save-picks"]');
+  const maxAttrBAfterA = await formB.locator('input[name="ats-points"]').getAttribute('max');
+  if (maxAttrBAfterA !== '300') throw new Error('FAIL: expected max="300" on teamB after a 700-pt wager on teamA this same week, got: ' + maxAttrBAfterA);
+  console.log('PASS: the weekly budget is tracked cumulatively across different games in the same week (300 left)');
+
+  // Trying to wager more than the remaining 300 on teamB is rejected.
+  await formB.locator('input[name="ats-pick"]').first().check();
+  await formB.locator('input[name="ats-points"]').fill('400');
+  await formB.locator('button[type="submit"]').click();
+  await page.waitForTimeout(200);
+  const toastTextB = await page.locator('#toast-root .toast').last().innerText().catch(() => null);
+  if (!toastTextB || !/only have 300 points left/i.test(toastTextB)) {
+    throw new Error('FAIL: expected a "300 points left" rejection popup for teamB, got: ' + toastTextB);
+  }
+  console.log('PASS: a wager exceeding the remaining weekly budget (across games) is rejected');
+
+  // Exactly the remaining 300 is accepted, using up the whole weekly budget.
+  await formB.locator('input[name="ats-pick"]').first().check();
+  await formB.locator('input[name="ats-points"]').fill('300');
+  await formB.locator('button[type="submit"]').click();
+  await page.waitForTimeout(200);
+  const recapTextB = await cardB.locator('.recap').innerText();
+  if (!/300 pts/.test(recapTextB)) throw new Error('FAIL: a 300-point wager should have been accepted (exactly the remaining budget), got: ' + recapTextB);
+  console.log('PASS: a wager for exactly the remaining budget is accepted');
+
+  // --- A separate player, to check a SETTLED LOSS from a prior week lowers
+  // the weekly budget itself (isolated from the cumulative-tracking checks
+  // above, which used a different player). ---
+  await page.click('button[data-action="log-out"]');
+  await page.waitForTimeout(150);
+  await signup('priorlossuser', 'Prior Loss Team');
+
   const cardC = cardFor(teamC);
   const formC = cardC.locator('form[data-action="save-picks"]');
   await formC.locator('input[name="ou-pick"][value="over"]').check();
@@ -112,14 +148,11 @@ function toLocalInputValue(d) {
 
   await page.click('button[data-action="set-tab"][data-tab="week"]');
   await page.waitForTimeout(150);
-  const cardB = cardFor(teamB);
-  const formB = cardB.locator('form[data-action="save-picks"]');
-  const maxAttrB = await formB.locator('input[name="ats-points"]').getAttribute('max');
-  // 1000 (start) - 600 (the settled O/U loss from the OTHER week) = 400.
-  // The pending 1000-pt ATS wager on teamA this SAME week doesn't count
-  // (still unsettled), so this isolates the prior-week loss's effect.
-  if (maxAttrB !== '400') throw new Error('FAIL: expected max="400" on teamB after a 600-pt loss in a prior week, got: ' + maxAttrB);
-  console.log('PASS: max wager reflects a settled loss from a prior week (400)');
+  const maxAttrCPlayer = await cardFor(teamA).locator('form[data-action="save-picks"] input[name="ats-points"]').getAttribute('max');
+  // 1000 (start) - 600 (the settled O/U loss from the OTHER week) = 400,
+  // and this player hasn't wagered anything in "Max Wager Test Week" yet.
+  if (maxAttrCPlayer !== '400') throw new Error('FAIL: expected max="400" on teamA for a player with a 600-pt loss in a prior week, got: ' + maxAttrCPlayer);
+  console.log('PASS: a settled loss from a prior week lowers the weekly budget itself (400)');
 
   console.log('ALL MAX-WAGER CHECKS PASSED');
   await browser.close();

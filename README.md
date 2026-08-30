@@ -49,10 +49,12 @@ how the app works, hand it to someone else, or rebuild it elsewhere.
   game locks, the collapsible admin games list, commissioner balance
   adjustments, hiding locked games from the This Week tab by default, the
   Rules tab (including its PIN gate), self-service password reset, the
-  minimum- and maximum-wager enforcement (max is a player's balance at the
-  start of the week), voiding a pick (with the actual side/pick hidden from
-  the commissioner's view), booting a player's account, the void-picks
-  player filter, the This Week sport filter, and rejecting a duplicate team
+  minimum-wager enforcement and a weekly wager budget (a player's combined
+  wagers across every game in a week can't exceed the balance they started
+  that week with), voiding a pick (with the actual side/pick hidden from
+  the commissioner's view), booting a player's account (and their wagers),
+  the void-picks player filter, the This Week sport filter, and rejecting a
+  duplicate team
   name at signup.
   Each test drives a full in-memory copy of
   the app in a headless browser — none of them touch the live artifact.
