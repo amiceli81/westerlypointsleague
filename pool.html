@@ -1418,7 +1418,8 @@
     isCommissioner: false,
     readOnly: false,
     capabilityChecked: false,
-    authMode: 'signup'
+    authMode: 'signup',
+    resetVerifiedUsername: null
   };
 
   // Migrate pre-account rosters (plain name strings) out of state.players --
@@ -1962,7 +1963,10 @@
   }
 
   function renderAuthPanel(){
-    var mode = view.authMode === 'login' ? 'login' : 'signup';
+    var mode = (view.authMode === 'login' || view.authMode === 'reset') ? view.authMode : 'signup';
+    // The tab bar only ever shows Sign up / Log in -- password reset is
+    // reached via a link under the login form, and always shows as neither
+    // tab active while it's open.
     var tabs = '<div class="auth-tabs">' +
       '<button type="button" class="' + (mode==='signup'?'active':'') + '" data-action="auth-mode" data-mode="signup">Sign up</button>' +
       '<button type="button" class="' + (mode==='login'?'active':'') + '" data-action="auth-mode" data-mode="login">Log in</button>' +
@@ -1986,13 +1990,33 @@
         '<p class="hint">This keeps picks straight within the group — it isn\'t real account security. Please don\'t reuse a password you use anywhere else.</p>' +
         '<div class="pick-actions"><button class="btn" type="submit">Create account</button></div>' +
       '</form>';
+    } else if(mode === 'reset'){
+      if(!view.resetVerifiedUsername){
+        form = '<form class="panel" id="auth-card" data-action="verify-reset">' +
+          '<p class="hint">Enter your username and the email on file for it to set a new password. There\'s no real email sent — this just checks the two match.</p>' +
+          '<div class="grid2">' +
+            '<div class="field"><label>Username</label><input name="username" autocomplete="username" required></div>' +
+            '<div class="field"><label>Email on file</label><input type="email" name="email" required></div>' +
+          '</div>' +
+          '<div class="pick-actions"><button type="button" class="linklike" data-action="auth-mode" data-mode="login">Back to log in</button><button class="btn" type="submit">Continue</button></div>' +
+        '</form>';
+      } else {
+        form = '<form class="panel" id="auth-card" data-action="reset-password">' +
+          '<p class="hint">Set a new password for <strong>' + esc(view.resetVerifiedUsername) + '</strong>.</p>' +
+          '<div class="grid2">' +
+            '<div class="field"><label>New password</label><input type="password" name="password" minlength="6" autocomplete="new-password" required></div>' +
+            '<div class="field"><label>Confirm new password</label><input type="password" name="confirmPassword" minlength="6" autocomplete="new-password" required></div>' +
+          '</div>' +
+          '<div class="pick-actions"><button type="button" class="linklike" data-action="auth-mode" data-mode="login">Cancel</button><button class="btn" type="submit">Reset password</button></div>' +
+        '</form>';
+      }
     } else {
       form = '<form class="panel" id="auth-card" data-action="login">' +
         '<div class="grid2">' +
           '<div class="field"><label>Username</label><input name="username" autocomplete="username" required></div>' +
           '<div class="field"><label>Password</label><input type="password" name="password" autocomplete="current-password" required></div>' +
         '</div>' +
-        '<div class="pick-actions"><button class="btn" type="submit">Log in</button></div>' +
+        '<div class="pick-actions"><button type="button" class="linklike" data-action="auth-mode" data-mode="reset">Forgot password?</button><button class="btn" type="submit">Log in</button></div>' +
       '</form>';
     }
     return '<div class="card">' + tabs + form + '</div>';
@@ -2366,6 +2390,7 @@
       if(authEl) authEl.scrollIntoView({behavior:'smooth', block:'start'});
     } else if(action === 'auth-mode'){
       view.authMode = el.getAttribute('data-mode');
+      if(view.authMode !== 'reset') view.resetVerifiedUsername = null;
       render();
     } else if(action === 'toggle-completed'){
       view.showCompleted = el.checked;
@@ -2483,6 +2508,33 @@
         try{ localStorage.setItem('poolUsername', profile.username); }catch(err){}
         render();
         toast('Welcome back, ' + profile.teamName + '.');
+      });
+    } else if(action === 'verify-reset'){
+      var vrUsername = normalizeUsername(fd.get('username'));
+      var vrEmail = String(fd.get('email')||'').trim().toLowerCase();
+      var vrProfile = findPlayer(vrUsername);
+      // No real email is sent -- this just checks the username and email on
+      // file match, then lets them straight through to set a new password.
+      if(!vrProfile || !vrProfile.email || vrProfile.email.trim().toLowerCase() !== vrEmail){
+        toast('No account matches that username and email.');
+        return;
+      }
+      view.resetVerifiedUsername = vrProfile.username;
+      render();
+    } else if(action === 'reset-password'){
+      if(!view.resetVerifiedUsername) return;
+      var rpProfile = findPlayer(view.resetVerifiedUsername);
+      if(!rpProfile){ view.resetVerifiedUsername = null; render(); return; }
+      var rpPassword = String(fd.get('password')||'');
+      var rpConfirm = String(fd.get('confirmPassword')||'');
+      if(rpPassword.length < 6){ toast('Password needs at least 6 characters.'); return; }
+      if(rpPassword !== rpConfirm){ toast('Passwords don\'t match.'); return; }
+      hashNewPassword(rpPassword).then(function(hashed){
+        rpProfile.salt = hashed.salt;
+        rpProfile.passwordHash = hashed.hash;
+        view.resetVerifiedUsername = null;
+        view.authMode = 'login';
+        save('Password reset — you can log in with your new password now.');
       });
     } else if(action === 'save-picks'){
       var gameId = form.getAttribute('data-game');
