@@ -101,6 +101,9 @@
   .week-head h2{ font-size:1.4rem; }
 
   .toolbar{ display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  .sport-filter{ display:flex; gap:4px; }
+  .sport-filter button{ font-family:Arial,Helvetica,sans-serif; font-size:.72rem; padding:5px 12px; border-radius:20px; border:1px solid var(--line); background:var(--surface); color:var(--text-dim); cursor:pointer; }
+  .sport-filter button.active{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600; }
   label.toggle{ display:flex; align-items:center; gap:7px; font-size:.8rem; color:var(--text-dim); cursor:pointer; }
 
   .card{ background:var(--surface); border:1px solid var(--line); border-radius:9px; box-shadow:var(--shadow); overflow:hidden; }
@@ -1422,7 +1425,8 @@
     capabilityChecked: false,
     authMode: 'signup',
     resetVerifiedUsername: null,
-    voidPickFilter: ''
+    voidPickFilter: '',
+    sportFilter: ''
   };
 
   // Migrate pre-account rosters (plain name strings) out of state.players --
@@ -2099,6 +2103,7 @@
     // so it always shows here rather than silently vanishing -- the
     // commissioner added it without a time for a reason.
     var games = allGames.filter(function(g){ return !g.kickoff || isWeekVisible(g.sport, g.week); });
+    if(view.sportFilter) games = games.filter(function(g){ return g.sport === view.sportFilter; });
     var label = currentWeekLabel(games);
     // A game drops off This Week the moment it locks (kickoff has passed, or
     // it's been marked final) -- this tab is only for games still open to
@@ -2113,7 +2118,10 @@
       if(!byKey[key]){ byKey[key] = { label: g.sport + ' — ' + g.week, items: [] }; groups.push(byKey[key]); }
       byKey[key].items.push(g);
     });
-    var toolbar = '<div class="toolbar"><span class="eyebrow">' + (label ? 'Showing ' + esc(label) : 'Current week') + '</span><label class="toggle"><input type="checkbox" data-action="toggle-completed" ' + (view.showCompleted?'checked':'') + '> Show locked games</label></div>';
+    var sportFilterButtons = '<div class="sport-filter">' + [['', 'All'], ['NFL', 'NFL'], ['NCAAF', 'NCAAF']].map(function(s){
+      return '<button type="button" class="' + (view.sportFilter === s[0] ? 'active' : '') + '" data-action="set-sport-filter" data-sport="' + s[0] + '">' + s[1] + '</button>';
+    }).join('') + '</div>';
+    var toolbar = '<div class="toolbar"><span class="eyebrow">' + (label ? 'Showing ' + esc(label) : 'Current week') + '</span>' + sportFilterButtons + '<label class="toggle"><input type="checkbox" data-action="toggle-completed" ' + (view.showCompleted?'checked':'') + '> Show locked games</label></div>';
     var html = authHtml + toolbar;
     if(!games.length){
       html += '<div class="empty">No games scheduled for the current week yet.<br>Check the <strong>All Picks</strong> tab for other weeks, or the Commissioner tab to add matchups.</div>';
@@ -2456,6 +2464,9 @@
       render();
     } else if(action === 'toggle-completed'){
       view.showCompleted = el.checked;
+      render();
+    } else if(action === 'set-sport-filter'){
+      view.sportFilter = el.getAttribute('data-sport');
       render();
     } else if(action === 'edit-game'){
       view.editingGameId = el.getAttribute('data-game');
