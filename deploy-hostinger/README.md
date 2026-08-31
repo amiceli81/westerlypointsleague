@@ -166,6 +166,15 @@ how that merge/settle logic works in `sync/sync.py`, update the matching
 logic in `sync-odds.php` too -- nothing keeps these two in sync
 automatically.
 
+**"Why didn't game X settle?"** -- add `&debugExtId=THAT_GAME_S_EXT_ID` to
+the URL (or `--debug-ext-id=...` on the CLI) to see exactly what
+SportsGameOdds reported for that one game's `extId` on this run, without
+touching the database at all: whether it showed up in the ended-events
+fetch, whether `status.completed` is true yet, and whether a final score
+was present. A game's `extId` isn't shown anywhere in the app's UI --
+ask Claude to look it up in your pool's saved state if you don't already
+have it handy.
+
 ## Things that work differently than the Claude Artifact version
 
 - **The odds sync is a separate script.** The "Odds Sync" scheduled job on

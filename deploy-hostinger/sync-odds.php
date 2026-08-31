@@ -387,6 +387,40 @@ function main(): void {
     }
     echo "Fetched " . count($scoreEvents) . " candidate ended events for settlement.\n";
 
+    // Read-only diagnostic: pass ?debugExtId=... (or --debug-ext-id=... on
+    // the CLI) to see exactly what SportsGameOdds reported for one specific
+    // game's extId, without touching the database at all. Handy for "why
+    // didn't game X settle" questions.
+    $debugExtId = null;
+    if (PHP_SAPI === 'cli') {
+        foreach ($GLOBALS['argv'] as $arg) {
+            if (str_starts_with($arg, '--debug-ext-id=')) $debugExtId = substr($arg, strlen('--debug-ext-id='));
+        }
+    } else {
+        $debugExtId = isset($_GET['debugExtId']) ? (string)$_GET['debugExtId'] : null;
+    }
+    if ($debugExtId !== null && $debugExtId !== '') {
+        $found = null;
+        foreach ($scoreEvents as $ev) {
+            if (($ev['eventID'] ?? null) === $debugExtId) { $found = $ev; break; }
+        }
+        if ($found === null) {
+            echo "DEBUG: extId {$debugExtId} was NOT among the " . count($scoreEvents) . " ended events SportsGameOdds returned for this run.\n";
+            echo "DEBUG: either the game isn't in the 3-day lookback window yet, or SportsGameOdds hasn't marked it ended.\n";
+        } else {
+            echo "DEBUG: found extId {$debugExtId} in the ended events:\n";
+            echo json_encode($found, JSON_PRETTY_PRINT) . "\n";
+            $completed = ($found['status']['completed'] ?? null) === true;
+            echo "DEBUG: status.completed = " . ($completed ? 'true' : 'false (not settled yet by SportsGameOdds)') . "\n";
+            if ($completed) {
+                $scores = extractFinalScores($found);
+                echo "DEBUG: extractFinalScores() = " . ($scores === null ? 'null (missing/unparseable score field on the odds object)' : json_encode($scores)) . "\n";
+            }
+        }
+        echo "DEBUG: no database changes made -- exiting before the save step.\n";
+        return;
+    }
+
     $pdo = db();
     try {
         $pdo->beginTransaction();
