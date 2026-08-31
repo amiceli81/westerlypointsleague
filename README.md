@@ -129,12 +129,15 @@ Two ways to keep spreads/totals and final scores current:
 
 1. **Manual** — ask Claude to run a one-off sync using `sync/sync.py`
    against fresh SportsGameOdds data.
-2. **Automatic, every 4 hours** — a scheduled task reads the live artifact,
+2. **Automatic, every 24 hours** — a scheduled task reads the live artifact,
    fetches fresh odds/scores, merges them with `sync/scheduled_sync.py`, and
    republishes, without ever touching wagers, player accounts, or a
    game that's already locked or final. It also never force-overwrites: if
    the live pool has newer activity (a pick, signup, admin edit) since its
    last run, it skips publishing that cycle rather than risk clobbering it.
+   (This only applies to the Claude Artifact; the Hostinger deployment has
+   its own separate `deploy-hostinger/sync-odds.php` cron script instead —
+   see that folder's README.)
 
    This requires `*.frame.claudeusercontent.com` to be allowed in this
    Claude environment's network settings (Code → Network access → Custom →
