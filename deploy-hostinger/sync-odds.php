@@ -343,33 +343,59 @@ function mergeScores(array &$games, array $scoreEvents): array {
         $status = $ev['status'] ?? [];
         if (empty($status['completed'])) continue;
         $extId = $ev['eventID'] ?? null;
-        if ($extId === null || !isset($byExt[$extId])) continue;
-        $idx = $byExt[$extId];
-        if (($games[$idx]['status'] ?? '') === 'final') continue;
+        $idx = ($extId !== null && isset($byExt[$extId])) ? $byExt[$extId] : null;
+        if ($idx === null) {
+            // Fuzzy fallback, same reasoning as mergeGames()'s own: a game
+            // added back when this pool synced from a DIFFERENT odds
+            // provider (this project's sync script used to run against The
+            // Odds API, api.the-odds-api.com, before switching to
+            // SportsGameOdds) carries that other provider's ID as its
+            // extId -- it will never match a real SportsGameOdds eventID no
+            // matter how the lookback window is sized. Match by team name +
+            // kickoff date instead so it can still be found and settled.
+            $teams = $ev['teams'] ?? [];
+            $evAsGame = [
+                'sport' => $ev['sport'] ?? null,
+                'kickoff' => $status['startsAt'] ?? null,
+                'home' => teamName($teams['home'] ?? null),
+                'away' => teamName($teams['away'] ?? null),
+            ];
+            foreach ($games as $i => $g) {
+                if (($g['status'] ?? '') === 'final') continue;
+                if (sameMatchup($g, $evAsGame)) { $idx = $i; break; }
+            }
+        }
+        if ($idx === null || ($games[$idx]['status'] ?? '') === 'final') continue;
         $scores = extractFinalScores($ev);
         if ($scores === null) continue;
         [$homeScore, $awayScore] = $scores;
         $games[$idx]['status'] = 'final';
         $games[$idx]['finalHome'] = $homeScore;
         $games[$idx]['finalAway'] = $awayScore;
+        // Adopt the event's real extId too, so future runs match it directly.
+        if ($extId !== null) $games[$idx]['extId'] = $extId;
         $settled[] = sprintf('%s %s @ %s (%d-%d)', $games[$idx]['sport'] ?? '', $games[$idx]['away'] ?? '', $games[$idx]['home'] ?? '', $awayScore, $homeScore);
     }
     return $settled;
 }
 
-function earliestStuckKickoff(PDO $pdo): ?DateTimeImmutable {
+function loadGamesReadOnly(PDO $pdo): array {
+    $row = $pdo->query('SELECT data FROM pool_state WHERE id = 1')->fetch(PDO::FETCH_ASSOC);
+    if (!$row) return [];
+    $data = json_decode($row['data'], true);
+    return $data['games'] ?? [];
+}
+
+function earliestStuckKickoff(array $games): ?DateTimeImmutable {
     // The oldest kickoff, among games still sitting as non-final on our own
     // board, that's already in the past -- i.e. a game that SHOULD have
     // settled by now but hasn't. Used to size the scores lookback window so
     // a sync gap of any length (the cron job down for a week, say) can't
     // permanently strand a game as unsettled by aging it out of a fixed
     // rolling window.
-    $row = $pdo->query('SELECT data FROM pool_state WHERE id = 1')->fetch(PDO::FETCH_ASSOC);
-    if (!$row) return null;
-    $data = json_decode($row['data'], true);
     $now = new DateTimeImmutable('now');
     $earliest = null;
-    foreach (($data['games'] ?? []) as $g) {
+    foreach ($games as $g) {
         if (($g['status'] ?? '') === 'final' || empty($g['kickoff'])) continue;
         try {
             $kt = new DateTimeImmutable($g['kickoff']);
@@ -389,7 +415,8 @@ function main(): void {
     // open; only the FOR UPDATE transaction near the bottom does that, and
     // it still only wraps the short, in-memory-only save step.
     $pdo = db();
-    $stuckSince = earliestStuckKickoff($pdo);
+    $earlyGames = loadGamesReadOnly($pdo);
+    $stuckSince = earliestStuckKickoff($earlyGames);
 
     // All network calls happen BEFORE the database transaction below, so a
     // slow or failing SportsGameOdds request never holds a row lock open
@@ -431,7 +458,10 @@ function main(): void {
     $scoreEvents = [];
     foreach (['NFL', 'NCAAF'] as $sport) {
         $events = fetchEvents($sport, ['ended' => 'true', 'startsAfter' => $scoresStartsAfter]);
-        foreach ($events as $e) $scoreEvents[] = $e;
+        foreach ($events as $e) {
+            $e['sport'] = $sport; // used by mergeScores()'s fuzzy fallback
+            $scoreEvents[] = $e;
+        }
     }
     echo "Fetched " . count($scoreEvents) . " candidate ended events for settlement (lookback since {$scoresStartsAfter}).\n";
 
@@ -455,6 +485,38 @@ function main(): void {
         if ($found === null) {
             echo "DEBUG: extId {$debugExtId} was NOT among the " . count($scoreEvents) . " ended events SportsGameOdds returned for this run (lookback since {$scoresStartsAfter}).\n";
             echo "DEBUG: either this game kicked off before that lookback start, or SportsGameOdds hasn't marked it ended yet.\n";
+
+            // Also try the same team+date fuzzy match mergeScores() itself
+            // falls back to -- catches the case where this extId is stale
+            // (e.g. left over from the old Odds API this project used
+            // before switching to SportsGameOdds) and the real game is
+            // among the fetched events under a DIFFERENT eventID.
+            $boardGame = null;
+            foreach ($earlyGames as $g) {
+                if (($g['extId'] ?? null) === $debugExtId) { $boardGame = $g; break; }
+            }
+            if ($boardGame === null) {
+                echo "DEBUG: (couldn't even find a game with that extId on the board itself to compare against.)\n";
+            } else {
+                $fuzzyMatch = null;
+                foreach ($scoreEvents as $ev) {
+                    $teams = $ev['teams'] ?? [];
+                    $evAsGame = [
+                        'sport' => $ev['sport'] ?? null,
+                        'kickoff' => ($ev['status'] ?? [])['startsAt'] ?? null,
+                        'home' => teamName($teams['home'] ?? null),
+                        'away' => teamName($teams['away'] ?? null),
+                    ];
+                    if (sameMatchup($boardGame, $evAsGame)) { $fuzzyMatch = $ev; break; }
+                }
+                if ($fuzzyMatch === null) {
+                    echo "DEBUG: no team+date fuzzy match either -- \"" . ($boardGame['away'] ?? '?') . " @ " . ($boardGame['home'] ?? '?') . "\" (kickoff {$boardGame['kickoff']}) genuinely isn't among the {$boardGame['sport']} ended events this run.\n";
+                } else {
+                    echo "DEBUG: FOUND a team+date fuzzy match under a DIFFERENT eventID -- \"" . ($boardGame['away'] ?? '?') . " @ " . ($boardGame['home'] ?? '?') . "\" matches this ended event:\n";
+                    echo json_encode($fuzzyMatch, JSON_PRETTY_PRINT) . "\n";
+                    echo "DEBUG: this confirms extId {$debugExtId} on the board is stale/foreign -- a normal (non-debug) run's mergeScores() fuzzy fallback will settle this using eventID " . ($fuzzyMatch['eventID'] ?? '?') . " instead.\n";
+                }
+            }
         } else {
             echo "DEBUG: found extId {$debugExtId} in the ended events:\n";
             echo json_encode($found, JSON_PRETTY_PRINT) . "\n";

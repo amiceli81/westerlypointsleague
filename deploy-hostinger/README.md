@@ -182,6 +182,17 @@ was present. A game's `extId` isn't shown anywhere in the app's UI --
 ask Claude to look it up in your pool's saved state if you don't already
 have it handy.
 
+One real cause this surfaced: a game added back when this pool synced from
+a *different* odds provider (this project's sync script used to run
+against The Odds API, api.the-odds-api.com, before switching to
+SportsGameOdds) carries that other provider's ID as its `extId` -- it will
+never match a real SportsGameOdds `eventID`, no matter the lookback window.
+`mergeScores()` falls back to matching by team name + kickoff date in that
+case (same idea as the odds-merge side's own fallback) and adopts the real
+`eventID` once it settles, so it only needs to happen once per game. The
+debug diagnostic checks for this too and says so explicitly when it finds
+a fuzzy match under a different ID.
+
 ## Things that work differently than the Claude Artifact version
 
 - **The odds sync is a separate script.** The "Odds Sync" scheduled job on
