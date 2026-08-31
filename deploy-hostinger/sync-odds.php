@@ -22,16 +22,28 @@ declare(strict_types=1);
 // One-time setup: see the "Scheduling the odds sync" section in this
 // folder's README.md.
 
+// STDERR isn't reliably defined outside a genuine CLI process -- some
+// hosts' cron wrappers invoke a script through something other than a
+// plain `php` CLI call, where fwrite(STDERR, ...) itself throws
+// "Undefined constant STDERR" and masks whatever error it was trying to
+// report. This never touches STDERR: it prints to stdout (captured by the
+// run-log wrapper below when called from inside main()) and, for the two
+// fatal checks below that happen before that wrapper starts, also writes
+// straight to the log file itself so a cron-only failure is never silent.
+function fatalLog(string $msg): void {
+    echo $msg . "\n";
+    @file_put_contents(__DIR__ . '/sync-odds-run.log', '[' . gmdate('Y-m-d H:i:s') . ' UTC] ' . $msg . "\n", FILE_APPEND | LOCK_EX);
+    exit(1);
+}
+
 $configPath = __DIR__ . '/config.php';
 if (!is_file($configPath)) {
-    fwrite(STDERR, "config.php is missing -- copy config.php.example to config.php first.\n");
-    exit(1);
+    fatalLog('config.php is missing -- copy config.php.example to config.php first.');
 }
 require $configPath;
 
 if (!isset($SPORTSGAMEODDS_API_KEY) || $SPORTSGAMEODDS_API_KEY === '' || $SPORTSGAMEODDS_API_KEY === 'REPLACE_WITH_YOUR_SPORTSGAMEODDS_API_KEY') {
-    fwrite(STDERR, "SPORTSGAMEODDS_API_KEY is not set in config.php -- add it and try again.\n");
-    exit(1);
+    fatalLog('SPORTSGAMEODDS_API_KEY is not set in config.php -- add it and try again.');
 }
 
 // Same HTTP-cron guard pattern as send-compliance-email.php: running this
@@ -82,21 +94,21 @@ function fetchEvents(string $leagueId, array $extraParams): array {
     $err = curl_error($ch);
     curl_close($ch);
     if ($body === false) {
-        fwrite(STDERR, "Fetch failed for {$leagueId}: {$err}\n");
+        echo "Fetch failed for {$leagueId}: {$err}\n";
         return [];
     }
     $decoded = json_decode($body, true);
     if (!is_array($decoded)) {
-        fwrite(STDERR, "Fetch for {$leagueId} returned non-JSON.\n");
+        echo "Fetch for {$leagueId} returned non-JSON.\n";
         return [];
     }
     if (($decoded['success'] ?? null) === false) {
-        fwrite(STDERR, "Fetch for {$leagueId} returned an API error: " . json_encode($decoded['error'] ?? $decoded) . "\n");
+        echo "Fetch for {$leagueId} returned an API error: " . json_encode($decoded['error'] ?? $decoded) . "\n";
         return [];
     }
     $data = $decoded['data'] ?? null;
     if (!is_array($data)) {
-        fwrite(STDERR, "Fetch for {$leagueId} response did not include a 'data' list.\n");
+        echo "Fetch for {$leagueId} response did not include a 'data' list.\n";
         return [];
     }
     return $data;
@@ -540,7 +552,7 @@ function main(): void {
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$row) {
             $pdo->rollBack();
-            fwrite(STDERR, "pool_state has no row with id=1 -- did you run schema.sql?\n");
+            echo "pool_state has no row with id=1 -- did you run schema.sql?\n";
             exit(1);
         }
         $data = json_decode($row['data'], true);
@@ -592,6 +604,9 @@ echo $output;
 $logLine = '[' . gmdate('Y-m-d H:i:s') . ' UTC] ' . str_replace("\n", "\n  ", rtrim($output)) . "\n";
 @file_put_contents(__DIR__ . '/sync-odds-run.log', $logLine, FILE_APPEND | LOCK_EX);
 if ($failed) {
-    fwrite(STDERR, "sync-odds.php failed: {$failMessage}\n");
+    // Already captured above (both echoed and written to the log file) --
+    // no separate STDERR write here, since that constant isn't reliably
+    // defined outside a genuine CLI process (see the fatalLog() note near
+    // the top of this file).
     exit(1);
 }
