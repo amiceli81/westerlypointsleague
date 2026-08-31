@@ -571,9 +571,27 @@ function main(): void {
     }
 }
 
+// Every run's output also gets appended to a log file sitting right next
+// to this script (blocked from direct HTTP access by .htaccess, same as
+// config.php) -- so "did the cron job actually run" is always answerable
+// by just opening this file in File Manager, without needing SSH access or
+// having to get a shell redirect's home-directory path exactly right in
+// the cron command itself.
+$failed = false;
+$failMessage = '';
+ob_start();
 try {
     main();
 } catch (Throwable $e) {
-    fwrite(STDERR, "sync-odds.php failed: " . $e->getMessage() . "\n");
+    $failed = true;
+    $failMessage = $e->getMessage();
+    echo "FAILED: {$failMessage}\n";
+}
+$output = ob_get_clean();
+echo $output;
+$logLine = '[' . gmdate('Y-m-d H:i:s') . ' UTC] ' . str_replace("\n", "\n  ", rtrim($output)) . "\n";
+@file_put_contents(__DIR__ . '/sync-odds-run.log', $logLine, FILE_APPEND | LOCK_EX);
+if ($failed) {
+    fwrite(STDERR, "sync-odds.php failed: {$failMessage}\n");
     exit(1);
 }

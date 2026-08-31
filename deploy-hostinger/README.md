@@ -160,6 +160,15 @@ it isn't affected by anything on the Claude side.
    save.` if nothing needed updating. Reload the site afterward to confirm
    any settled games now show a final score.
 
+**Confirming the cron job itself is actually running:** every run --
+whether triggered by cron, a browser visit, or manually -- appends its
+output to `sync-odds-run.log`, sitting right next to `sync-odds.php` in
+`public_html` (blocked from direct HTTP access by `.htaccess`, same as
+`config.php`). Open it in **hPanel → Files → File Manager** any time to
+see a timestamped history of every run and what it did, with no need for
+SSH access or getting a shell-redirect path exactly right in the cron
+command itself.
+
 This script duplicates `sync/sync.py`'s merge logic in PHP, since a cron
 job has no Python runtime to run that script directly. If you ever change
 how that merge/settle logic works in `sync/sync.py`, update the matching
