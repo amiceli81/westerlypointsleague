@@ -26,8 +26,10 @@ $DB_PASS = 'REPLACE_WITH_YOUR_DATABASE_PASSWORD';
 //   php -r "echo bin2hex(random_bytes(24)), PHP_EOL;"
 $SAVE_KEY = '768ce1746f1c1681822b2e2e692649c19534fd8732b665a2';
 
-// Only needed if you're using sync-odds.php (the automatic odds/scores
-// cron job -- see the "Scheduling the odds sync" section in this folder's
-// README.md). Get a key at sportsgameodds.com; leave the placeholder below
-// if you're not using that script.
-$SPORTSGAMEODDS_API_KEY = 'REPLACE_WITH_YOUR_SPORTSGAMEODDS_API_KEY';
+// Only needed if you're using sync-odds.php (the automatic odds cron job --
+// see the "Scheduling the odds sync" section in this folder's README.md).
+// Get a key at sharpapi.io (their dashboard has an "API Reference" page and
+// a key-management section); leave the placeholder below if you're not
+// using that script. This only pulls spreads/totals for upcoming games --
+// games are still settled manually via the Commissioner tab's Settle form.
+$SHARPAPI_KEY = 'REPLACE_WITH_YOUR_SHARPAPI_KEY';

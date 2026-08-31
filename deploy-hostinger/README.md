@@ -33,9 +33,10 @@ it, it just gives you a second copy running on your own domain.
   be run on a schedule via a Hostinger cron job -- see "Scheduling the
   weekly under-wagered email" below.
 - **sync-odds.php** — a standalone script (not linked from the site) that
-  fetches fresh NFL/NCAAF spreads/totals and final scores directly from
-  SportsGameOdds and merges them into the board. Meant to be run on a
-  schedule via a Hostinger cron job -- see "Scheduling the odds sync" below.
+  fetches fresh NFL/NCAAF spreads/totals directly from SharpAPI and merges
+  them into the board. Doesn't settle games (see "Scheduling the odds
+  sync" below for why) -- that's still done manually via the Commissioner
+  tab's Settle form. Meant to be run on a schedule via a Hostinger cron job.
 
 ## Deploy steps
 
@@ -117,12 +118,19 @@ pool.html, update the matching logic in `send-compliance-email.php` too.
 ## Scheduling the odds sync
 
 `sync-odds.php` fetches fresh NFL/NCAAF spreads/totals (for games that
-haven't kicked off) and final scores (for games that have finished)
-straight from SportsGameOdds, and merges them into `pool_state` -- adding
-new games, updating lines on still-open games, and settling finished games
-with their final score. It never touches a game that's already locked
-(past kickoff) or already final, and never touches wagers, player
-accounts, announcements, or rules text.
+haven't kicked off yet) straight from SharpAPI, and merges them into
+`pool_state` -- adding new games and updating lines on still-open games. It
+never touches a game that's already locked (past kickoff) or already
+final, and never touches wagers, player accounts, announcements, or rules
+text.
+
+**It does not settle games.** SharpAPI's only source of final scores (its
+"Game State" endpoints) is Enterprise-tier only and is documented as live
+game-state data, not a durable final-result record -- not something to
+build automatic settlement on. Games are settled manually via the
+Commissioner tab's existing "Settle" form in the app (enter the final
+score, click Settle) -- a deliberate choice given the cost of an
+Enterprise-tier plan versus just doing this one step by hand.
 
 Unlike the Claude Artifact's own scheduled sync -- which runs inside a
 Claude-hosted environment and reads/publishes to the Claude Artifact URL
@@ -130,8 +138,10 @@ specifically, so it has no connection to this site at all -- this script
 makes its own outbound HTTPS request directly from Hostinger's server, so
 it isn't affected by anything on the Claude side.
 
-1. **Get a SportsGameOdds API key** (sportsgameodds.com) and paste it into
-   `$SPORTSGAMEODDS_API_KEY` in `config.php` (see `config.php.example`).
+1. **Get a SharpAPI key** (sharpapi.io) and paste it into `$SHARPAPI_KEY`
+   in `config.php` (see `config.php.example`). Free tier is enough for
+   this -- odds/lines access doesn't require a paid plan, and this script
+   only calls `/odds`, never anything Enterprise-gated.
 
 2. **Upload `sync-odds.php`** alongside the other files.
 
@@ -156,9 +166,9 @@ it isn't affected by anything on the Claude side.
 4. **Test it once manually** before trusting the schedule: run the `php ...`
    command yourself (or visit the URL with your secret) and check the
    output -- you should see a line like `Games added: 2, updated: 5` /
-   `Games settled: 1` / `Saved as version N.`, or `No changes -- nothing to
-   save.` if nothing needed updating. Reload the site afterward to confirm
-   any settled games now show a final score.
+   `Saved as version N.`, or `No changes -- nothing to save.` if nothing
+   needed updating. Reload the site afterward to confirm new games showed
+   up and lines look right.
 
 **Confirming the cron job itself is actually running:** every run --
 whether triggered by cron, a browser visit, or manually -- appends its
@@ -169,47 +179,30 @@ see a timestamped history of every run and what it did, with no need for
 SSH access or getting a shell-redirect path exactly right in the cron
 command itself.
 
-This script duplicates `sync/sync.py`'s merge logic in PHP, since a cron
-job has no Python runtime to run that script directly. If you ever change
-how that merge/settle logic works in `sync/sync.py`, update the matching
-logic in `sync-odds.php` too -- nothing keeps these two in sync
-automatically.
+This script's merge logic (adding new games, updating lines on still-open
+games, never touching a locked/final game) mirrors the same rules
+`sync/sync.py` uses for the Claude Artifact side, just adapted to
+SharpAPI's response shape instead of SportsGameOdds'. If you ever change
+those merge rules, update the matching logic in `sync-odds.php` too --
+nothing keeps these two in sync automatically.
 
-The scores lookback normally only asks SportsGameOdds for games that ended
-in the last 3 days (plenty for a job running every couple of hours). If the
-cron job goes down for a while and a still-open game on your board falls
-outside that window, the script automatically widens the lookback back to
-just before that game's own kickoff (capped at 30 days back) instead of
-letting it get permanently stranded as unsettled.
-
-**"Why didn't game X settle?"** -- add `&debugExtId=THAT_GAME_S_EXT_ID` to
-the URL (or `--debug-ext-id=...` on the CLI) to see exactly what
-SportsGameOdds reported for that one game's `extId` on this run, without
-touching the database at all: whether it showed up in the ended-events
-fetch, whether `status.completed` is true yet, and whether a final score
-was present. A game's `extId` isn't shown anywhere in the app's UI --
-ask Claude to look it up in your pool's saved state if you don't already
-have it handy.
-
-One real cause this surfaced: a game added back when this pool synced from
-a *different* odds provider (this project's sync script used to run
-against The Odds API, api.the-odds-api.com, before switching to
-SportsGameOdds) carries that other provider's ID as its `extId` -- it will
-never match a real SportsGameOdds `eventID`, no matter the lookback window.
-`mergeScores()` falls back to matching by team name + kickoff date in that
-case (same idea as the odds-merge side's own fallback) and adopts the real
-`eventID` once it settles, so it only needs to happen once per game. The
-debug diagnostic checks for this too and says so explicitly when it finds
-a fuzzy match under a different ID.
+A game's line is pulled from a single sportsbook (DraftKings, set via the
+`SHARPAPI_SPORTSBOOK` constant near the top of the file) rather than
+comparing across books -- matches how the app has always shown one line
+per game. NCAAF is filtered to the same "top programs" allowlist the
+Claude-side sync uses, so the board isn't flooded with 100+ FCS/small-
+conference games every week.
 
 ## Things that work differently than the Claude Artifact version
 
-- **The odds sync is a separate script.** The "Odds Sync" scheduled job on
-  the Claude side reads and publishes to the *Claude Artifact* URL
-  specifically — it has no connection to this Hostinger site and never
-  updates it. This deployment has its own equivalent (`sync-odds.php`, see
-  "Scheduling the odds sync" above) that talks to SportsGameOdds directly
-  from Hostinger's own server instead.
+- **The odds sync is a separate script, and doesn't settle games.** The
+  "Odds Sync" scheduled job on the Claude side reads and publishes to the
+  *Claude Artifact* URL specifically — it has no connection to this
+  Hostinger site and never updates it. This deployment has its own
+  equivalent (`sync-odds.php`, see "Scheduling the odds sync" above) that
+  talks to SharpAPI directly from Hostinger's own server instead, for
+  odds/lines only -- games are settled manually via the Commissioner tab's
+  Settle form (SharpAPI's final-score data is Enterprise-tier only).
 - **No live push between open tabs.** Same as the Artifact version: each
   visitor's board is only as fresh as when they last loaded or reloaded the
   page. There's no background refresh.

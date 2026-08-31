@@ -2,22 +2,23 @@
 declare(strict_types=1);
 
 // Pulls fresh NFL/NCAAF spreads & totals for games that haven't kicked off
-// yet, and final scores for games that have finished, straight from
-// SportsGameOdds (api.sportsgameodds.com) -- called from Hostinger's OWN
-// server. Unlike the Claude Artifact's scheduled sync (which runs inside a
-// Claude-hosted environment whose network egress can block outbound calls
-// to third-party APIs), this script makes its own outbound HTTP request
-// directly from Hostinger, so that restriction doesn't apply here.
+// yet, straight from SharpAPI (api.sharpapi.io) -- called from Hostinger's
+// OWN server, so the Claude Artifact's own network egress restrictions
+// (which can block outbound calls to third-party APIs from that side) don't
+// apply here.
 //
-// Ports sync/sync.py's merge logic to PHP (see that script's docstring for
-// the full design rationale) so this can run as a plain Hostinger cron job
-// with no Python runtime and no browser involved. Only ADDS new games or
-// UPDATES lines on games that are still open and haven't kicked off yet;
-// NEVER touches a game that's already locked (kickoff has passed) or
-// already final, and never touches wagers, player accounts, announcements,
-// rules text, or anything else in pool_state. If you ever change the
-// merge/settle rules in sync/sync.py, update the matching logic below too
-// -- nothing keeps these two in sync automatically.
+// This does NOT settle games automatically. SharpAPI's only source of final
+// scores (its "Game State" endpoints) is Enterprise-tier only and is
+// documented as live-game-state data, not a durable final-result record --
+// too shaky a foundation to build automatic settlement on. Games are
+// settled manually instead, via the Commissioner tab's existing "Settle"
+// form in pool.html (enter the final score, click Settle) -- this was a
+// deliberate choice, not a missing feature.
+//
+// Only ever ADDS new games or UPDATES lines on games that are still open
+// and haven't kicked off yet; NEVER touches a game that's already locked
+// (kickoff passed) or already final, and never touches wagers, player
+// accounts, announcements, rules text, or anything else in pool_state.
 //
 // One-time setup: see the "Scheduling the odds sync" section in this
 // folder's README.md.
@@ -42,8 +43,8 @@ if (!is_file($configPath)) {
 }
 require $configPath;
 
-if (!isset($SPORTSGAMEODDS_API_KEY) || $SPORTSGAMEODDS_API_KEY === '' || $SPORTSGAMEODDS_API_KEY === 'REPLACE_WITH_YOUR_SPORTSGAMEODDS_API_KEY') {
-    fatalLog('SPORTSGAMEODDS_API_KEY is not set in config.php -- add it and try again.');
+if (!isset($SHARPAPI_KEY) || $SHARPAPI_KEY === '' || $SHARPAPI_KEY === 'REPLACE_WITH_YOUR_SHARPAPI_KEY') {
+    fatalLog('SHARPAPI_KEY is not set in config.php -- add it and try again.');
 }
 
 // Same HTTP-cron guard pattern as send-compliance-email.php: running this
@@ -73,54 +74,73 @@ function db(): PDO {
     );
 }
 
-// ---------- SportsGameOdds fetch ----------
+// ---------- SharpAPI fetch ----------
 
-const ODD_HOME_SPREAD = 'points-home-game-sp-home';
-const ODD_AWAY_SPREAD = 'points-away-game-sp-away';
-const ODD_TOTAL_OVER = 'points-all-game-ou-over';
-const ODD_TOTAL_UNDER = 'points-all-game-ou-under';
+// Free tier only includes DraftKings + FanDuel -- DraftKings picked as the
+// one consistent book the app displays a single line from (matches how the
+// old SportsGameOdds integration always showed one line per game, not a
+// book-by-book comparison).
+const SHARPAPI_SPORTSBOOK = 'draftkings';
 
-function fetchEvents(string $leagueId, array $extraParams): array {
-    global $SPORTSGAMEODDS_API_KEY;
-    $params = array_merge(['apiKey' => $SPORTSGAMEODDS_API_KEY, 'leagueID' => $leagueId, 'limit' => '100'], $extraParams);
-    $url = 'https://api.sportsgameodds.com/v2/events?' . http_build_query($params);
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_HTTPHEADER => ['Accept: application/json'],
-    ]);
-    $body = curl_exec($ch);
-    $err = curl_error($ch);
-    curl_close($ch);
-    if ($body === false) {
-        echo "Fetch failed for {$leagueId}: {$err}\n";
-        return [];
+function fetchSharpOdds(string $league): array {
+    // league is SharpAPI's lowercase league id ('nfl' or 'ncaaf').
+    global $SHARPAPI_KEY;
+    $allRows = [];
+    $offset = 0;
+    for ($page = 0; $page < 20; $page++) { // safety cap against a pagination loop bug
+        $params = [
+            'sport' => 'football',
+            'league' => $league,
+            'market' => 'point_spread,total_points',
+            'sportsbook' => SHARPAPI_SPORTSBOOK,
+            'limit' => '500',
+            'offset' => (string)$offset,
+        ];
+        $url = 'https://api.sharpapi.io/api/v1/odds?' . http_build_query($params);
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTPHEADER => ['X-API-Key: ' . $SHARPAPI_KEY, 'Accept: application/json'],
+        ]);
+        $body = curl_exec($ch);
+        $err = curl_error($ch);
+        curl_close($ch);
+        if ($body === false) {
+            echo "Fetch failed for {$league}: {$err}\n";
+            break;
+        }
+        $decoded = json_decode($body, true);
+        if (!is_array($decoded)) {
+            echo "Fetch for {$league} returned non-JSON.\n";
+            break;
+        }
+        if (isset($decoded['error'])) {
+            echo "Fetch for {$league} returned an API error: " . json_encode($decoded['error']) . "\n";
+            break;
+        }
+        $data = $decoded['data'] ?? null;
+        if (!is_array($data)) {
+            echo "Fetch for {$league} response did not include a 'data' list.\n";
+            break;
+        }
+        $allRows = array_merge($allRows, $data);
+        $pagination = $decoded['pagination'] ?? [];
+        if (empty($pagination['has_more'])) break;
+        $next = $pagination['next_offset'] ?? null;
+        if ($next === null) break;
+        $offset = (int)$next;
     }
-    $decoded = json_decode($body, true);
-    if (!is_array($decoded)) {
-        echo "Fetch for {$leagueId} returned non-JSON.\n";
-        return [];
-    }
-    if (($decoded['success'] ?? null) === false) {
-        echo "Fetch for {$leagueId} returned an API error: " . json_encode($decoded['error'] ?? $decoded) . "\n";
-        return [];
-    }
-    $data = $decoded['data'] ?? null;
-    if (!is_array($data)) {
-        echo "Fetch for {$leagueId} response did not include a 'data' list.\n";
-        return [];
-    }
-    return $data;
+    return $allRows;
 }
 
-// ---------- ported merge logic (mirrors sync/sync.py) ----------
+// ---------- ported merge logic (mirrors sync/sync.py's odds-only half) ----------
 
 // Both the "School Mascot" form AND the bare school name are listed for each
-// program -- SportsGameOdds' teams.*.names.long field is inconsistent about
-// including the mascot, and this is an exact-match set (not a substring
-// check) so a bare name like "Arkansas" can be whitelisted without also
-// matching an unrelated team whose name merely contains that substring.
+// program -- team-name fields are inconsistent about including the mascot
+// across sources, and this is an exact-match set (not a substring check) so
+// a bare name like "Arkansas" can be whitelisted without also matching an
+// unrelated team whose name merely contains that substring.
 $NCAAF_TOP_PROGRAMS = array_fill_keys([
     "Georgia Bulldogs","Georgia","Texas Longhorns","Texas","Ohio State Buckeyes","Ohio State",
     "Michigan Wolverines","Michigan","Alabama Crimson Tide","Alabama","LSU Tigers","LSU",
@@ -157,47 +177,49 @@ function isNcaafTopProgram(?string $name): bool {
     return $name !== null && isset($NCAAF_TOP_PROGRAMS[$name]);
 }
 
-function teamName($teamObj): ?string {
-    if (!is_array($teamObj)) return null;
-    $names = $teamObj['names'] ?? [];
-    return $names['long'] ?? $names['medium'] ?? $names['short'] ?? ($teamObj['teamID'] ?? null);
+function groupOddsRowsByEvent(array $rows): array {
+    // SharpAPI's /odds returns one row per (event, market, selection) --
+    // e.g. 4 rows for one game (point_spread home, point_spread away,
+    // total_points over, total_points under). Group back into one entry
+    // per event before extracting the actual spread/total numbers.
+    $byEvent = [];
+    foreach ($rows as $r) {
+        $eid = $r['event_id'] ?? null;
+        if ($eid === null) continue;
+        $byEvent[$eid][] = $r;
+    }
+    return $byEvent;
 }
 
-function oddNum($oddObj, array $keys): ?float {
-    if (!is_array($oddObj)) return null;
-    foreach ($keys as $key) {
-        if (!array_key_exists($key, $oddObj) || $oddObj[$key] === null) continue;
-        if (is_numeric($oddObj[$key])) return (float)$oddObj[$key];
+function normalizeSharpEvent(string $eventId, array $rows, string $sportLabel): ?array {
+    $homeName = null;
+    $awayName = null;
+    $kickoff = null;
+    $homeSpread = null;
+    $total = null;
+    foreach ($rows as $r) {
+        if ($homeName === null) $homeName = $r['home_team'] ?? null;
+        if ($awayName === null) $awayName = $r['away_team'] ?? null;
+        if ($kickoff === null) $kickoff = $r['event_start_time'] ?? null;
+        $marketType = $r['market_type'] ?? null;
+        $selectionType = $r['selection_type'] ?? null;
+        $line = $r['line'] ?? null;
+        if ($line === null) continue;
+        if ($marketType === 'point_spread' && $selectionType === 'home') {
+            $homeSpread = (float)$line;
+        } elseif ($marketType === 'point_spread' && $selectionType === 'away' && $homeSpread === null) {
+            // Mirror fallback if the home-side row is missing for some
+            // reason -- the two sides of a spread market mirror each other.
+            $homeSpread = -(float)$line;
+        }
+        if ($marketType === 'total_points' && ($selectionType === 'over' || $selectionType === 'under')) {
+            $total = (float)$line;
+        }
     }
-    return null;
-}
-
-function normalizeEvent(array $event, string $sportLabel): ?array {
-    $teams = $event['teams'] ?? [];
-    $homeName = teamName($teams['home'] ?? null);
-    $awayName = teamName($teams['away'] ?? null);
-    if (!$homeName || !$awayName) return null;
-
-    $status = $event['status'] ?? [];
-    $kickoff = $status['startsAt'] ?? null;
-    if (!$kickoff) return null;
-
-    $odds = $event['odds'] ?? [];
-    $homeSpread = oddNum($odds[ODD_HOME_SPREAD] ?? null, ['bookSpread', 'fairSpread']);
-    if ($homeSpread === null) {
-        // The two sides of a spread market mirror each other, so the away
-        // side's line is an equally valid source if the home entry is absent.
-        $awaySpread = oddNum($odds[ODD_AWAY_SPREAD] ?? null, ['bookSpread', 'fairSpread']);
-        $homeSpread = $awaySpread !== null ? -$awaySpread : null;
-    }
-    $total = oddNum($odds[ODD_TOTAL_OVER] ?? null, ['bookOverUnder', 'fairOverUnder']);
-    if ($total === null) {
-        $total = oddNum($odds[ODD_TOTAL_UNDER] ?? null, ['bookOverUnder', 'fairOverUnder']);
-    }
-    if ($homeSpread === null || $total === null) return null;
+    if (!$homeName || !$awayName || !$kickoff || $homeSpread === null || $total === null) return null;
 
     return [
-        'extId' => $event['eventID'] ?? null,
+        'extId' => $eventId,
         'sport' => $sportLabel,
         'week' => null, // filled in by assignWeekNumbers(), once per sport
         'away' => $awayName,
@@ -207,19 +229,6 @@ function normalizeEvent(array $event, string $sportLabel): ?array {
         'total' => $total,
         'kickoff' => $kickoff,
     ];
-}
-
-function extractFinalScores(array $event): ?array {
-    // SportsGameOdds has no separate top-level "final score" field -- once a
-    // game ends, the realized value of each graded odd is written into that
-    // odd's own "score" field. The two point-spread odds happen to be scoped
-    // to exactly one team each, so their "score" values ARE that team's
-    // final points.
-    $odds = $event['odds'] ?? [];
-    $homeScore = oddNum($odds[ODD_HOME_SPREAD] ?? null, ['score']);
-    $awayScore = oddNum($odds[ODD_AWAY_SPREAD] ?? null, ['score']);
-    if ($homeScore === null || $awayScore === null) return null;
-    return [(int)$homeScore, (int)$awayScore];
 }
 
 function weekTuesdayStart(DateTimeImmutable $d): DateTimeImmutable {
@@ -272,10 +281,8 @@ function normName(?string $name): string {
 function sameMatchup(array $a, array $b): bool {
     // Two games are the "same" real-world matchup if they're the same
     // sport, kicked off on the same calendar day, and each side's team name
-    // is a substring of (or equal to) the other's -- catching the common
-    // "School" vs "School Mascot" naming inconsistency SportsGameOdds itself
-    // exhibits, as well as mismatches between different sync runs/ID schemes
-    // for the same real event.
+    // is a substring of (or equal to) the other's -- catches team-name
+    // formatting differences and ID-scheme mismatches between sync runs.
     if (($a['sport'] ?? null) !== ($b['sport'] ?? null)) return false;
     $ak = $a['kickoff'] ?? null;
     $bk = $b['kickoff'] ?? null;
@@ -340,209 +347,27 @@ function mergeGames(array &$games, array $fetched): array {
     return [$added, $updated];
 }
 
-function mergeScores(array &$games, array $scoreEvents): array {
-    // Settles any OPEN game whose SportsGameOdds event now reports
-    // status.completed=true, by writing status="final" and the two final
-    // scores. Never touches a game already marked final, never adds games,
-    // and never touches wagers -- those settle themselves automatically in
-    // the page the moment gameResult()/wagerResult() see status="final".
-    $byExt = [];
-    foreach ($games as $i => $g) {
-        if (!empty($g['extId'])) $byExt[$g['extId']] = $i;
-    }
-    $settled = [];
-    foreach ($scoreEvents as $ev) {
-        $status = $ev['status'] ?? [];
-        if (empty($status['completed'])) continue;
-        $extId = $ev['eventID'] ?? null;
-        $idx = ($extId !== null && isset($byExt[$extId])) ? $byExt[$extId] : null;
-        if ($idx === null) {
-            // Fuzzy fallback, same reasoning as mergeGames()'s own: a game
-            // added back when this pool synced from a DIFFERENT odds
-            // provider (this project's sync script used to run against The
-            // Odds API, api.the-odds-api.com, before switching to
-            // SportsGameOdds) carries that other provider's ID as its
-            // extId -- it will never match a real SportsGameOdds eventID no
-            // matter how the lookback window is sized. Match by team name +
-            // kickoff date instead so it can still be found and settled.
-            $teams = $ev['teams'] ?? [];
-            $evAsGame = [
-                'sport' => $ev['sport'] ?? null,
-                'kickoff' => $status['startsAt'] ?? null,
-                'home' => teamName($teams['home'] ?? null),
-                'away' => teamName($teams['away'] ?? null),
-            ];
-            foreach ($games as $i => $g) {
-                if (($g['status'] ?? '') === 'final') continue;
-                if (sameMatchup($g, $evAsGame)) { $idx = $i; break; }
-            }
-        }
-        if ($idx === null || ($games[$idx]['status'] ?? '') === 'final') continue;
-        $scores = extractFinalScores($ev);
-        if ($scores === null) continue;
-        [$homeScore, $awayScore] = $scores;
-        $games[$idx]['status'] = 'final';
-        $games[$idx]['finalHome'] = $homeScore;
-        $games[$idx]['finalAway'] = $awayScore;
-        // Adopt the event's real extId too, so future runs match it directly.
-        if ($extId !== null) $games[$idx]['extId'] = $extId;
-        $settled[] = sprintf('%s %s @ %s (%d-%d)', $games[$idx]['sport'] ?? '', $games[$idx]['away'] ?? '', $games[$idx]['home'] ?? '', $awayScore, $homeScore);
-    }
-    return $settled;
-}
-
-function loadGamesReadOnly(PDO $pdo): array {
-    $row = $pdo->query('SELECT data FROM pool_state WHERE id = 1')->fetch(PDO::FETCH_ASSOC);
-    if (!$row) return [];
-    $data = json_decode($row['data'], true);
-    return $data['games'] ?? [];
-}
-
-function earliestStuckKickoff(array $games): ?DateTimeImmutable {
-    // The oldest kickoff, among games still sitting as non-final on our own
-    // board, that's already in the past -- i.e. a game that SHOULD have
-    // settled by now but hasn't. Used to size the scores lookback window so
-    // a sync gap of any length (the cron job down for a week, say) can't
-    // permanently strand a game as unsettled by aging it out of a fixed
-    // rolling window.
-    $now = new DateTimeImmutable('now');
-    $earliest = null;
-    foreach ($games as $g) {
-        if (($g['status'] ?? '') === 'final' || empty($g['kickoff'])) continue;
-        try {
-            $kt = new DateTimeImmutable($g['kickoff']);
-        } catch (Throwable $e) {
-            continue;
-        }
-        if ($kt >= $now) continue;
-        if ($earliest === null || $kt < $earliest) $earliest = $kt;
-    }
-    return $earliest;
-}
-
 function main(): void {
-    // Opened here (a plain read, no lock yet) so the scores lookback window
-    // below can size itself off our own board's data. Reused later for the
-    // actual write -- opening the connection early doesn't hold anything
-    // open; only the FOR UPDATE transaction near the bottom does that, and
-    // it still only wraps the short, in-memory-only save step.
-    $pdo = db();
-    $earlyGames = loadGamesReadOnly($pdo);
-    $stuckSince = earliestStuckKickoff($earlyGames);
-
-    // All network calls happen BEFORE the database transaction below, so a
-    // slow or failing SportsGameOdds request never holds a row lock open
-    // and blocks a player's pick or signup from saving in the meantime.
     $normalized = [];
     $rawCount = 0;
-    foreach (['NFL', 'NCAAF'] as $sport) {
-        $events = fetchEvents($sport, ['oddsAvailable' => 'true', 'started' => 'false']);
-        $rawCount += count($events);
-        foreach ($events as $e) {
-            if ($sport === 'NCAAF') {
-                $homeN = teamName($e['teams']['home'] ?? null);
-                $awayN = teamName($e['teams']['away'] ?? null);
+    foreach (['nfl', 'ncaaf'] as $league) {
+        $sportLabel = strtoupper($league); // 'NFL' / 'NCAAF' -- matches pool.html's sport labels
+        $rows = fetchSharpOdds($league);
+        $rawCount += count($rows);
+        $byEvent = groupOddsRowsByEvent($rows);
+        foreach ($byEvent as $eventId => $eventRows) {
+            if ($sportLabel === 'NCAAF') {
+                $homeN = $eventRows[0]['home_team'] ?? null;
+                $awayN = $eventRows[0]['away_team'] ?? null;
                 if (!isNcaafTopProgram($homeN) && !isNcaafTopProgram($awayN)) continue;
             }
-            $n = normalizeEvent($e, $sport);
+            $n = normalizeSharpEvent((string)$eventId, $eventRows, $sportLabel);
             if ($n) $normalized[] = $n;
         }
     }
-    echo "Fetched {$rawCount} raw odds events, " . count($normalized) . " normalized after filtering.\n";
+    echo "Fetched {$rawCount} raw odds rows, " . count($normalized) . " normalized events after filtering.\n";
 
-    // Normally just a 3-day rolling window (plenty for a job that runs every
-    // couple of hours). But if some non-final game on our own board already
-    // kicked off earlier than that, widen the window back to just before
-    // that game's kickoff instead -- otherwise a sync gap (the cron job
-    // down for a few days, say) could let a stuck game age out of a fixed
-    // window and never settle. Capped at 30 days back so one bad/garbage
-    // kickoff timestamp can't blow up the query.
-    $defaultLookback = (new DateTimeImmutable('now'))->modify('-3 days');
-    $maxLookback = (new DateTimeImmutable('now'))->modify('-30 days');
-    if ($stuckSince !== null && $stuckSince->modify('-1 day') < $defaultLookback) {
-        $lookbackStart = $stuckSince->modify('-1 day');
-        if ($lookbackStart < $maxLookback) $lookbackStart = $maxLookback;
-    } else {
-        $lookbackStart = $defaultLookback;
-    }
-    $scoresStartsAfter = $lookbackStart->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
-
-    $scoreEvents = [];
-    foreach (['NFL', 'NCAAF'] as $sport) {
-        $events = fetchEvents($sport, ['ended' => 'true', 'startsAfter' => $scoresStartsAfter]);
-        foreach ($events as $e) {
-            $e['sport'] = $sport; // used by mergeScores()'s fuzzy fallback
-            $scoreEvents[] = $e;
-        }
-    }
-    echo "Fetched " . count($scoreEvents) . " candidate ended events for settlement (lookback since {$scoresStartsAfter}).\n";
-
-    // Read-only diagnostic: pass ?debugExtId=... (or --debug-ext-id=... on
-    // the CLI) to see exactly what SportsGameOdds reported for one specific
-    // game's extId, without touching the database at all. Handy for "why
-    // didn't game X settle" questions.
-    $debugExtId = null;
-    if (PHP_SAPI === 'cli') {
-        foreach ($GLOBALS['argv'] as $arg) {
-            if (str_starts_with($arg, '--debug-ext-id=')) $debugExtId = substr($arg, strlen('--debug-ext-id='));
-        }
-    } else {
-        $debugExtId = isset($_GET['debugExtId']) ? (string)$_GET['debugExtId'] : null;
-    }
-    if ($debugExtId !== null && $debugExtId !== '') {
-        $found = null;
-        foreach ($scoreEvents as $ev) {
-            if (($ev['eventID'] ?? null) === $debugExtId) { $found = $ev; break; }
-        }
-        if ($found === null) {
-            echo "DEBUG: extId {$debugExtId} was NOT among the " . count($scoreEvents) . " ended events SportsGameOdds returned for this run (lookback since {$scoresStartsAfter}).\n";
-            echo "DEBUG: either this game kicked off before that lookback start, or SportsGameOdds hasn't marked it ended yet.\n";
-
-            // Also try the same team+date fuzzy match mergeScores() itself
-            // falls back to -- catches the case where this extId is stale
-            // (e.g. left over from the old Odds API this project used
-            // before switching to SportsGameOdds) and the real game is
-            // among the fetched events under a DIFFERENT eventID.
-            $boardGame = null;
-            foreach ($earlyGames as $g) {
-                if (($g['extId'] ?? null) === $debugExtId) { $boardGame = $g; break; }
-            }
-            if ($boardGame === null) {
-                echo "DEBUG: (couldn't even find a game with that extId on the board itself to compare against.)\n";
-            } else {
-                $fuzzyMatch = null;
-                foreach ($scoreEvents as $ev) {
-                    $teams = $ev['teams'] ?? [];
-                    $evAsGame = [
-                        'sport' => $ev['sport'] ?? null,
-                        'kickoff' => ($ev['status'] ?? [])['startsAt'] ?? null,
-                        'home' => teamName($teams['home'] ?? null),
-                        'away' => teamName($teams['away'] ?? null),
-                    ];
-                    if (sameMatchup($boardGame, $evAsGame)) { $fuzzyMatch = $ev; break; }
-                }
-                if ($fuzzyMatch === null) {
-                    echo "DEBUG: no team+date fuzzy match either -- \"" . ($boardGame['away'] ?? '?') . " @ " . ($boardGame['home'] ?? '?') . "\" (kickoff {$boardGame['kickoff']}) genuinely isn't among the {$boardGame['sport']} ended events this run.\n";
-                } else {
-                    echo "DEBUG: FOUND a team+date fuzzy match under a DIFFERENT eventID -- \"" . ($boardGame['away'] ?? '?') . " @ " . ($boardGame['home'] ?? '?') . "\" matches this ended event:\n";
-                    echo json_encode($fuzzyMatch, JSON_PRETTY_PRINT) . "\n";
-                    echo "DEBUG: this confirms extId {$debugExtId} on the board is stale/foreign -- a normal (non-debug) run's mergeScores() fuzzy fallback will settle this using eventID " . ($fuzzyMatch['eventID'] ?? '?') . " instead.\n";
-                }
-            }
-        } else {
-            echo "DEBUG: found extId {$debugExtId} in the ended events:\n";
-            echo json_encode($found, JSON_PRETTY_PRINT) . "\n";
-            $completed = ($found['status']['completed'] ?? null) === true;
-            echo "DEBUG: status.completed = " . ($completed ? 'true' : 'false (not settled yet by SportsGameOdds)') . "\n";
-            if ($completed) {
-                $scores = extractFinalScores($found);
-                echo "DEBUG: extractFinalScores() = " . ($scores === null ? 'null (missing/unparseable score field on the odds object)' : json_encode($scores)) . "\n";
-            }
-        }
-        echo "DEBUG: no database changes made -- exiting before the save step.\n";
-        return;
-    }
-
+    $pdo = db();
     try {
         $pdo->beginTransaction();
         // FOR UPDATE takes a row lock for the duration of this (short,
@@ -561,11 +386,7 @@ function main(): void {
         [$added, $updated] = mergeGames($games, $normalized);
         echo "Games added: {$added}, updated: {$updated}\n";
 
-        $settled = mergeScores($games, $scoreEvents);
-        echo "Games settled: " . count($settled) . "\n";
-        foreach ($settled as $line) echo "  {$line}\n";
-
-        if ($added === 0 && $updated === 0 && count($settled) === 0) {
+        if ($added === 0 && $updated === 0) {
             $pdo->rollBack();
             echo "No changes -- nothing to save.\n";
             return;
