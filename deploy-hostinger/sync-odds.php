@@ -39,7 +39,7 @@ if (!isset($SPORTSGAMEODDS_API_KEY) || $SPORTSGAMEODDS_API_KEY === '' || $SPORTS
 // string. Direct CLI execution (Hostinger's cron calling this script
 // itself) needs no secret. Generate your own with:
 //   php -r "echo bin2hex(random_bytes(24)), PHP_EOL;"
-const CRON_HTTP_SECRET = 'REPLACE_WITH_YOUR_OWN_RANDOM_SECRET_IF_USING_URL_CRON';
+const CRON_HTTP_SECRET = 'b6aadf609ee78771e325d5f0f713351ad72bc554936631eb';
 
 if (PHP_SAPI !== 'cli') {
     $provided = isset($_GET['secret']) ? (string)$_GET['secret'] : '';
