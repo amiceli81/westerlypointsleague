@@ -357,8 +357,39 @@ function mergeScores(array &$games, array $scoreEvents): array {
     return $settled;
 }
 
+function earliestStuckKickoff(PDO $pdo): ?DateTimeImmutable {
+    // The oldest kickoff, among games still sitting as non-final on our own
+    // board, that's already in the past -- i.e. a game that SHOULD have
+    // settled by now but hasn't. Used to size the scores lookback window so
+    // a sync gap of any length (the cron job down for a week, say) can't
+    // permanently strand a game as unsettled by aging it out of a fixed
+    // rolling window.
+    $row = $pdo->query('SELECT data FROM pool_state WHERE id = 1')->fetch(PDO::FETCH_ASSOC);
+    if (!$row) return null;
+    $data = json_decode($row['data'], true);
+    $now = new DateTimeImmutable('now');
+    $earliest = null;
+    foreach (($data['games'] ?? []) as $g) {
+        if (($g['status'] ?? '') === 'final' || empty($g['kickoff'])) continue;
+        try {
+            $kt = new DateTimeImmutable($g['kickoff']);
+        } catch (Throwable $e) {
+            continue;
+        }
+        if ($kt >= $now) continue;
+        if ($earliest === null || $kt < $earliest) $earliest = $kt;
+    }
+    return $earliest;
+}
+
 function main(): void {
-    $threeDaysAgo = gmdate('Y-m-d\T00:00:00\Z', time() - 3 * 86400);
+    // Opened here (a plain read, no lock yet) so the scores lookback window
+    // below can size itself off our own board's data. Reused later for the
+    // actual write -- opening the connection early doesn't hold anything
+    // open; only the FOR UPDATE transaction near the bottom does that, and
+    // it still only wraps the short, in-memory-only save step.
+    $pdo = db();
+    $stuckSince = earliestStuckKickoff($pdo);
 
     // All network calls happen BEFORE the database transaction below, so a
     // slow or failing SportsGameOdds request never holds a row lock open
@@ -380,12 +411,29 @@ function main(): void {
     }
     echo "Fetched {$rawCount} raw odds events, " . count($normalized) . " normalized after filtering.\n";
 
+    // Normally just a 3-day rolling window (plenty for a job that runs every
+    // couple of hours). But if some non-final game on our own board already
+    // kicked off earlier than that, widen the window back to just before
+    // that game's kickoff instead -- otherwise a sync gap (the cron job
+    // down for a few days, say) could let a stuck game age out of a fixed
+    // window and never settle. Capped at 30 days back so one bad/garbage
+    // kickoff timestamp can't blow up the query.
+    $defaultLookback = (new DateTimeImmutable('now'))->modify('-3 days');
+    $maxLookback = (new DateTimeImmutable('now'))->modify('-30 days');
+    if ($stuckSince !== null && $stuckSince->modify('-1 day') < $defaultLookback) {
+        $lookbackStart = $stuckSince->modify('-1 day');
+        if ($lookbackStart < $maxLookback) $lookbackStart = $maxLookback;
+    } else {
+        $lookbackStart = $defaultLookback;
+    }
+    $scoresStartsAfter = $lookbackStart->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d\TH:i:s\Z');
+
     $scoreEvents = [];
     foreach (['NFL', 'NCAAF'] as $sport) {
-        $events = fetchEvents($sport, ['ended' => 'true', 'startsAfter' => $threeDaysAgo]);
+        $events = fetchEvents($sport, ['ended' => 'true', 'startsAfter' => $scoresStartsAfter]);
         foreach ($events as $e) $scoreEvents[] = $e;
     }
-    echo "Fetched " . count($scoreEvents) . " candidate ended events for settlement.\n";
+    echo "Fetched " . count($scoreEvents) . " candidate ended events for settlement (lookback since {$scoresStartsAfter}).\n";
 
     // Read-only diagnostic: pass ?debugExtId=... (or --debug-ext-id=... on
     // the CLI) to see exactly what SportsGameOdds reported for one specific
@@ -405,8 +453,8 @@ function main(): void {
             if (($ev['eventID'] ?? null) === $debugExtId) { $found = $ev; break; }
         }
         if ($found === null) {
-            echo "DEBUG: extId {$debugExtId} was NOT among the " . count($scoreEvents) . " ended events SportsGameOdds returned for this run.\n";
-            echo "DEBUG: either the game isn't in the 3-day lookback window yet, or SportsGameOdds hasn't marked it ended.\n";
+            echo "DEBUG: extId {$debugExtId} was NOT among the " . count($scoreEvents) . " ended events SportsGameOdds returned for this run (lookback since {$scoresStartsAfter}).\n";
+            echo "DEBUG: either this game kicked off before that lookback start, or SportsGameOdds hasn't marked it ended yet.\n";
         } else {
             echo "DEBUG: found extId {$debugExtId} in the ended events:\n";
             echo json_encode($found, JSON_PRETTY_PRINT) . "\n";
@@ -421,7 +469,6 @@ function main(): void {
         return;
     }
 
-    $pdo = db();
     try {
         $pdo->beginTransaction();
         // FOR UPDATE takes a row lock for the duration of this (short,

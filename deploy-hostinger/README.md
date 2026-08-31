@@ -166,6 +166,13 @@ how that merge/settle logic works in `sync/sync.py`, update the matching
 logic in `sync-odds.php` too -- nothing keeps these two in sync
 automatically.
 
+The scores lookback normally only asks SportsGameOdds for games that ended
+in the last 3 days (plenty for a job running every couple of hours). If the
+cron job goes down for a while and a still-open game on your board falls
+outside that window, the script automatically widens the lookback back to
+just before that game's own kickoff (capped at 30 days back) instead of
+letting it get permanently stranded as unsettled.
+
 **"Why didn't game X settle?"** -- add `&debugExtId=THAT_GAME_S_EXT_ID` to
 the URL (or `--debug-ext-id=...` on the CLI) to see exactly what
 SportsGameOdds reported for that one game's `extId` on this run, without
