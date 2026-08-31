@@ -135,23 +135,23 @@ it isn't affected by anything on the Claude side.
 
 2. **Upload `sync-odds.php`** alongside the other files.
 
-3. **In hPanel, go to Advanced → Cron Jobs** and create a new job. Every 1-4
-   hours is reasonable (spreads move gradually and games settle within a
-   few hours of ending, so there's no benefit to running this more often
-   than every hour). Same two options as the compliance email above:
+3. **In hPanel, go to Advanced → Cron Jobs** and create a new job that runs
+   **every 2 hours** (cron expression `0 */2 * * *`, or hPanel's own
+   "Every 2 hours" preset if it offers one). Same two options as the
+   compliance email above:
    - **Run PHP directly** (simplest):
      ```
      php /home/YOUR_HOSTINGER_USERNAME/public_html/sync-odds.php
      ```
-   - **Hit a URL**: generate a secret with
-     `php -r "echo bin2hex(random_bytes(24)), PHP_EOL;"`, paste it into
-     `CRON_HTTP_SECRET` in `sync-odds.php` (upload the edited file), then
-     point the cron job at:
+   - **Hit a URL**: a secret is already set in `sync-odds.php`'s
+     `CRON_HTTP_SECRET` constant, so just point the cron job at:
      ```
-     wget -q -O /dev/null "https://yourdomain.com/sync-odds.php?secret=YOUR_SECRET"
+     wget -q -O /dev/null "https://yourdomain.com/sync-odds.php?secret=b6aadf609ee78771e325d5f0f713351ad72bc554936631eb"
      ```
-     Without a real secret set, any HTTP request to this file is rejected
-     with 403.
+     (generate your own instead with
+     `php -r "echo bin2hex(random_bytes(24)), PHP_EOL;"` and paste it into
+     `CRON_HTTP_SECRET` if you'd rather not reuse the one above). Without a
+     real secret set, any HTTP request to this file is rejected with 403.
 
 4. **Test it once manually** before trusting the schedule: run the `php ...`
    command yourself (or visit the URL with your secret) and check the
