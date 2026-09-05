@@ -41,7 +41,7 @@ how the app works, hand it to someone else, or rebuild it elsewhere.
   tends to get paraphrased or summarized. See its module docstring for the
   expected input shape.
 
-- **tests/** — a Playwright regression suite (26 files) covering: duplicate
+- **tests/** — a Playwright regression suite (27 files) covering: duplicate
   pick prevention, the under-wagered compliance report (including its
   Monday-8:30pm-ET freeze, the commissioner's manual "Update this week"
   override, and its own CSV export), the email/mailto composer,
@@ -68,7 +68,10 @@ how the app works, hand it to someone else, or rebuild it elsewhere.
   count for games that haven't started, the under-wagered report's
   per-player wager count (in both the on-page table and its CSV export),
   and the pick form's reminder of how many more points a player still
-  needs to wager to reach half their starting-week balance.
+  needs to wager to reach half their starting-week balance, and multi-league
+  support (self-serve league creation from a shared picker screen, each
+  league's players/games/wagers/settings fully isolated from every other
+  league, and a player's login kept separate per league).
   Each test drives a full in-memory copy of
   the app in a headless browser — none of them touch the live artifact.
   `tests/build_test_full.py` wraps `pool.html` in a minimal `<html>` shell
@@ -83,6 +86,39 @@ how the app works, hand it to someone else, or rebuild it elsewhere.
   python3 tests/build_test_full.py
   for f in tests/test_*.js; do node "$f"; done
   ```
+
+## Multi-league
+
+This one Claude Artifact can now host any number of independent leagues,
+each with its own commissioner, players, games, wagers, rules text, and
+settings — fully isolated from every other league.
+
+- **The picker.** If exactly one league exists, the page skips straight
+  into it (so the existing league behaves exactly as before). Once a
+  second league exists, opening the page shows a picker listing every
+  league (name, player count, game count) with an **Enter** button, plus a
+  **Start a new league** form — just a name, everything else defaults the
+  same way this app always has (1000-point starting balance, PIN `1234`,
+  empty roster/board) and gets adjusted afterward from that league's own
+  Commissioner tab. Anyone can create a league; there's no gatekeeping.
+- **All Leagues.** From inside any league, a small link next to its name
+  switches back to the picker.
+- **Accounts are per-league**, not global — the same username can be used
+  independently in different leagues (they're unrelated accounts), and
+  being logged in (or being commissioner) in one league has no effect on
+  any other. Your login for each league you've entered is remembered on
+  your own device, so switching back to a league you were already in signs
+  you back in there automatically.
+- **No cross-reload deep links yet.** Which league you're currently viewing
+  lives only in the page's memory for that session — reloading the page (or
+  reopening the artifact later) returns to the single-league auto-entry or
+  the picker, not whichever league you last had open. Bookmarking a
+  specific league isn't supported in this version.
+- **The Hostinger deployment (`deploy-hostinger/`) does not have this
+  feature** — it's still single-league only. `deploy-hostinger/build.py`
+  will fail loudly if run against this version of `pool.html`, by design
+  (its exact-text substitutions no longer match) rather than silently
+  producing a broken `index.html`.
 
 ## Accounts
 

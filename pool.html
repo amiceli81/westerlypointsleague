@@ -1,4 +1,4 @@
-<title>The Westerly Points League</title>
+<title>Pick 'Em Leagues</title>
 <style id="app-style">
 
   :root{
@@ -1403,25 +1403,7 @@
   var SCRIPT_TEXT = document.currentScript.textContent;
   var MIN_WAGER = 100;
 
-  var state = null;
-  try{ state = JSON.parse(document.getElementById('state-data').textContent); }catch(e){ state = null; }
-  if(!state || typeof state !== 'object'){
-    state = {poolName:"The Westerly Points League", startingBalance:1000, commissionerPin:"1234", players:[], games:[], wagers:[]};
-  }
-  state.players = state.players || [];
-  state.games = state.games || [];
-  state.wagers = state.wagers || [];
-  state.announcements = state.announcements || [];
-  state.adjustments = state.adjustments || [];
-  state.weekVisibility = state.weekVisibility || {};
-  state.rulesText = state.rulesText || '';
-  // Anchors when the compliance report last unfroze -- see
-  // complianceReferenceTime(). Defaulting to now (rather than leaving it
-  // unset) means a pool that's never touched this feature stays live, same
-  // as before, until the very next Monday 8:30pm ET freeze point.
-  state.complianceUpdatedAt = state.complianceUpdatedAt || new Date().toISOString();
-
-  var view = {
+  var VIEW_DEFAULTS = {
     tab: 'week',
     showCompleted: false,
     editingGameId: null,
@@ -1440,18 +1422,124 @@
     complianceSortAsc: false
   };
 
-  // Migrate pre-account rosters (plain name strings) out of state.players --
-  // those names have no password and can't log in under the new system.
-  // Their past wagers still display fine (displayName() falls back to the
-  // raw stored string for anything that isn't a real account).
-  state.players = (state.players || []).filter(function(p){ return p && typeof p === 'object'; });
+  function normalizeLeagueData(data){
+    data = (data && typeof data === 'object') ? data : {};
+    data.poolName = data.poolName || "The Westerly Points League";
+    data.startingBalance = (typeof data.startingBalance === 'number') ? data.startingBalance : 1000;
+    data.commissionerPin = data.commissionerPin || "1234";
+    data.players = data.players || [];
+    data.games = data.games || [];
+    data.wagers = data.wagers || [];
+    data.announcements = data.announcements || [];
+    data.adjustments = data.adjustments || [];
+    data.weekVisibility = data.weekVisibility || {};
+    data.rulesText = data.rulesText || '';
+    // Anchors when the compliance report last unfroze -- see
+    // complianceReferenceTime(). Defaulting to now (rather than leaving it
+    // unset) means a league that's never touched this feature stays live,
+    // same as before, until the very next Monday 8:30pm ET freeze point.
+    data.complianceUpdatedAt = data.complianceUpdatedAt || new Date().toISOString();
+    // Migrate pre-account rosters (plain name strings) out of players --
+    // those names have no password and can't log in under the new system.
+    // Their past wagers still display fine (displayName() falls back to the
+    // raw stored string for anything that isn't a real account).
+    data.players = data.players.filter(function(p){ return p && typeof p === 'object'; });
+    return data;
+  }
 
-  try{ view.isCommissioner = localStorage.getItem('poolIsCommissioner') === 'yes'; }catch(e){}
+  // Every league's data used to be the WHOLE persisted document (state-data
+  // held one bare pool object, no wrapper). Multi-league wraps that same
+  // shape inside { leagues: [{id, name, createdAt, data}, ...] } -- a
+  // document not already in that shape (today's live site, or a brand-new
+  // artifact) gets its existing content wrapped as ONE league under a FIXED
+  // id ('original', never a random one) so re-running this wrap before the
+  // first post-refactor save lands is always idempotent, no matter how many
+  // times a stale unmigrated document gets loaded in the meantime.
+  var rootState = null;
+  try{ rootState = JSON.parse(document.getElementById('state-data').textContent); }catch(e){ rootState = null; }
+  if(!rootState || typeof rootState !== 'object' || !Array.isArray(rootState.leagues)){
+    var legacyData = (rootState && typeof rootState === 'object' && (rootState.poolName || rootState.games || rootState.players)) ? rootState : null;
+    rootState = {
+      leagues: legacyData ? [{
+        id: 'original',
+        name: legacyData.poolName || "The Westerly Points League",
+        createdAt: new Date().toISOString(),
+        data: legacyData
+      }] : []
+    };
+  }
+  rootState.leagues.forEach(function(lg){ lg.data = normalizeLeagueData(lg.data); });
+
+  function findLeague(id){
+    return rootState.leagues.filter(function(l){ return l.id === id; })[0] || null;
+  }
+
+  // Per-league login/commissioner state, keyed by league id, in ONE stored
+  // blob rather than a separately-named key per league. This replaces two
+  // bare global keys (poolUsername/poolIsCommissioner) that are now
+  // intentionally-dead orphans in players' browsers, never read again --
+  // a player's login in one league has always been meant to be independent
+  // of their login in any other.
+  function loadAccountsStore(){
+    try{
+      var raw = localStorage.getItem('poolAccounts');
+      var parsed = raw ? JSON.parse(raw) : {};
+      return (parsed && typeof parsed === 'object') ? parsed : {};
+    }catch(e){ return {}; }
+  }
+  function setCurrentLeagueAccount(patch){
+    if(!activeLeagueId) return;
+    try{
+      var store = loadAccountsStore();
+      store[activeLeagueId] = Object.assign({}, store[activeLeagueId], patch);
+      localStorage.setItem('poolAccounts', JSON.stringify(store));
+    }catch(e){}
+  }
+  function currentLeagueAccount(){
+    var store = loadAccountsStore();
+    return (activeLeagueId && store[activeLeagueId]) || null;
+  }
+
+  var activeLeagueId = null;
+  var state = null;
+  var view = Object.assign({}, VIEW_DEFAULTS);
   var currentPlayer = null;
-  try{ currentPlayer = localStorage.getItem('poolUsername') || null; }catch(e){}
-  if(currentPlayer && !findPlayer(currentPlayer)){
+
+  function activateLeague(leagueId){
+    var lg = findLeague(leagueId);
+    if(!lg) return false;
+    activeLeagueId = leagueId;
+    state = lg.data;
+    view = Object.assign({}, VIEW_DEFAULTS);
+    var acct = currentLeagueAccount();
+    view.isCommissioner = !!(acct && acct.isCommissioner);
+    currentPlayer = (acct && acct.username && findPlayer(acct.username)) ? acct.username : null;
+    if(acct && acct.username && !currentPlayer){
+      // Stored username no longer resolves (e.g. the player was booted) --
+      // drop just that, leaving any commissioner flag for this league alone.
+      setCurrentLeagueAccount({ username: null });
+    }
+    try{ localStorage.setItem('poolLastLeagueId', leagueId); }catch(e){}
+    document.title = state.poolName;
+    return true;
+  }
+  function enterLeague(leagueId){
+    if(activateLeague(leagueId)) render();
+  }
+  function showLeaguePicker(){
+    activeLeagueId = null;
+    state = null;
+    view = Object.assign({}, VIEW_DEFAULTS);
     currentPlayer = null;
-    try{ localStorage.removeItem('poolUsername'); }catch(e){}
+    document.title = TITLE_TEXT;
+    render();
+  }
+
+  // A brand-new site (or the live one today, which has exactly one league)
+  // skips the picker entirely and goes straight in -- the picker only shows
+  // up once there's an actual choice to make (0 or 2+ leagues).
+  if(rootState.leagues.length === 1){
+    activateLeague(rootState.leagues[0].id);
   }
 
   var artifactCap = null;
@@ -2076,8 +2164,14 @@
   }
 
   function buildFullDocument(){
-    var json = JSON.stringify(state).replace(/</g, '\\u003c');
-    return '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>' + esc(TITLE_TEXT) + '</title>\n<style id="app-style">' + STYLE_TEXT + '</style>\n</head>\n<body>\n<div id="toast-root"></div>\n<div id="app">Loading the board…</div>\n<script id="state-data" type="application/json">' + json + '<\/script>\n<script>' + SCRIPT_TEXT + '<\/script>\n</body>\n</html>';
+    var json = JSON.stringify(rootState).replace(/</g, '\\u003c');
+    // The persisted <title> reflects whichever league is currently active
+    // (or the generic site title, TITLE_TEXT, while showing the picker) --
+    // computed fresh here rather than baked in once at parse time, since
+    // TITLE_TEXT alone can't track which league is active or that it can
+    // change over the document's lifetime.
+    var docTitle = (activeLeagueId && state) ? state.poolName : TITLE_TEXT;
+    return '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>' + esc(docTitle) + '</title>\n<style id="app-style">' + STYLE_TEXT + '</style>\n</head>\n<body>\n<div id="toast-root"></div>\n<div id="app">Loading the board…</div>\n<script id="state-data" type="application/json">' + json + '<\/script>\n<script>' + SCRIPT_TEXT + '<\/script>\n</body>\n</html>';
   }
 
   var saving = false;
@@ -2120,7 +2214,39 @@
   function render(){
     var app = document.getElementById('app');
     if(!app) return;
+    if(!activeLeagueId || !state){
+      app.innerHTML = renderLeaguePicker();
+      return;
+    }
     app.innerHTML = renderHeader() + renderTabs() + (view.readOnly ? '<div class="readonly-banner">Read-only view — ask the pool owner to give you edit access so you can submit picks.</div>' : '') + '<div class="app-shell"><div class="layout"><aside class="sidebar card">' + renderMessageBoard() + '</aside><main>' + renderTabContent() + '</main></div><footer class="note">Points, not payments — a friendly office pool. Spread &amp; total lines are entered by the commissioner, not pulled live.</footer></div>';
+  }
+
+  function renderLeaguePicker(){
+    var leagues = rootState.leagues.slice().sort(function(a,b){ return (a.createdAt||'') < (b.createdAt||'') ? -1 : 1; });
+    var lastId = null;
+    try{ lastId = localStorage.getItem('poolLastLeagueId'); }catch(e){}
+    var list;
+    if(!leagues.length){
+      list = '<div class="empty">No leagues yet — create the first one below.</div>';
+    } else {
+      list = '<div class="table-wrap"><table class="board"><thead><tr><th>League</th><th class="num">Players</th><th class="num">Games</th><th></th></tr></thead><tbody>' +
+        leagues.map(function(lg){
+          var d = lg.data || {};
+          return '<tr' + (lg.id === lastId ? ' style="background:var(--surface-2)"' : '') + '>' +
+            '<td>' + esc(lg.name || 'Untitled league') + '</td>' +
+            '<td class="num mono">' + ((d.players||[]).length) + '</td>' +
+            '<td class="num mono">' + ((d.games||[]).length) + '</td>' +
+            '<td style="text-align:right"><button type="button" class="btn ghost" data-action="enter-league" data-league-id="' + esc(lg.id) + '">Enter</button></td>' +
+            '</tr>';
+        }).join('') + '</tbody></table></div>';
+    }
+    return '<div class="app-shell"><div style="max-width:640px;margin:40px auto;display:flex;flex-direction:column;gap:22px">' +
+      '<div style="text-align:center"><h1 class="pool-title">Pick \'Em Leagues</h1><p class="hint">Pick a league to enter, or start your own.</p></div>' +
+      '<div class="card"><div class="section-title"><h3>Your leagues</h3></div>' + list + '</div>' +
+      '<div class="card"><div class="section-title"><h3>Start a new league</h3></div>' +
+      '<form class="panel" data-action="create-league"><div class="field"><label>League name</label><input name="name" required placeholder="e.g. Smith Family Pool"></div>' +
+      '<div class="pick-actions"><button class="btn" type="submit">Create league</button></div></form></div>' +
+      '</div></div>';
   }
 
   function renderHeader(){
@@ -2131,7 +2257,7 @@
     } else {
       chip = '<button type="button" class="btn ghost" data-action="goto-auth">Log in / Sign up</button>';
     }
-    return '<header class="top"><div class="row"><h1 class="pool-title">' + esc(state.poolName) + '</h1>' + chip + '</div></header>';
+    return '<header class="top"><div class="row"><div><h1 class="pool-title">' + esc(state.poolName) + '</h1><button type="button" class="linklike" data-action="show-league-picker">All Leagues</button></div>' + chip + '</div></header>';
   }
 
   function renderTabs(){
@@ -2703,9 +2829,13 @@
     if(action === 'set-tab'){
       view.tab = el.getAttribute('data-tab');
       render();
+    } else if(action === 'enter-league'){
+      enterLeague(el.getAttribute('data-league-id'));
+    } else if(action === 'show-league-picker'){
+      showLeaguePicker();
     } else if(action === 'log-out'){
       currentPlayer = null;
-      try{ localStorage.removeItem('poolUsername'); }catch(err){}
+      setCurrentLeagueAccount({ username: null });
       render();
     } else if(action === 'goto-auth'){
       view.tab = 'week';
@@ -2850,7 +2980,7 @@
         state.wagers = state.wagers.filter(function(w){ return w.player !== bootUsername; });
         if(currentPlayer === bootUsername){
           currentPlayer = null;
-          try{ localStorage.removeItem('poolUsername'); }catch(err){}
+          setCurrentLeagueAccount({ username: null });
         }
         save('Player booted.');
       }
@@ -2904,7 +3034,7 @@
           createdAt: new Date().toISOString()
         });
         currentPlayer = suUsername;
-        try{ localStorage.setItem('poolUsername', suUsername); }catch(err){}
+        setCurrentLeagueAccount({ username: suUsername });
         save('Welcome to the pool, ' + suTeamName + '!');
       });
     } else if(action === 'login'){
@@ -2915,7 +3045,7 @@
       verifyPassword(liPassword, profile.salt, profile.passwordHash).then(function(ok){
         if(!ok){ toast('Wrong password.'); return; }
         currentPlayer = profile.username;
-        try{ localStorage.setItem('poolUsername', profile.username); }catch(err){}
+        setCurrentLeagueAccount({ username: profile.username });
         render();
         toast('Welcome back, ' + profile.teamName + '.');
       });
@@ -2991,11 +3121,18 @@
       var pin = String(fd.get('pin') || '').trim();
       if(pin === state.commissionerPin){
         view.isCommissioner = true;
-        try{ localStorage.setItem('poolIsCommissioner', 'yes'); }catch(err){}
+        setCurrentLeagueAccount({ isCommissioner: true });
         render();
       } else {
         toast('Wrong PIN.');
       }
+    } else if(action === 'create-league'){
+      var newLeagueName = String(fd.get('name')||'').trim();
+      if(!newLeagueName){ toast('Please enter a league name.'); return; }
+      var newLeague = { id: uid(), name: newLeagueName, createdAt: new Date().toISOString(), data: normalizeLeagueData({poolName: newLeagueName}) };
+      rootState.leagues.push(newLeague);
+      enterLeague(newLeague.id);
+      save('League created! You\'re in.');
     } else if(action === 'save-payment'){
       if(!view.isCommissioner) return;
       var payUsername = form.getAttribute('data-player');
@@ -3099,7 +3236,9 @@
 
   // ---------- init ----------
   function init(){
-    document.title = state.poolName;
+    // document.title is already set correctly by activateLeague() (auto-
+    // entered single league) or left as the generic site title (picker
+    // showing, no league active) -- nothing to do here.
     if(window.claude && typeof window.claude.use === 'function'){
       window.claude.use('artifact').then(function(cap){
         artifactCap = cap;

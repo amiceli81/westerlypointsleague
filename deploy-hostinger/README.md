@@ -195,6 +195,15 @@ conference games every week.
 
 ## Things that work differently than the Claude Artifact version
 
+- **This deployment is single-league only.** The Claude Artifact now
+  supports hosting multiple independent leagues in one document (a
+  self-serve picker, isolated accounts/games/wagers per league). This
+  Hostinger deployment hasn't been ported to that yet — it still runs
+  exactly one league per `pool_state` row, same as always. `build.py` will
+  fail loudly (not silently) if run against a `pool.html` from after that
+  change landed, since its exact-text substitutions no longer match the
+  new state-parsing code; that's expected until a future multi-league port
+  of this deployment happens.
 - **The odds sync is a separate script, and doesn't settle games.** The
   "Odds Sync" scheduled job on the Claude side reads and publishes to the
   *Claude Artifact* URL specifically — it has no connection to this
