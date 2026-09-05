@@ -97,10 +97,17 @@ settings — fully isolated from every other league.
   into it (so the existing league behaves exactly as before). Once a
   second league exists, opening the page shows a picker listing every
   league (name, player count, game count) with an **Enter** button, plus a
-  **Start a new league** form — just a name, everything else defaults the
-  same way this app always has (1000-point starting balance, PIN `1234`,
-  empty roster/board) and gets adjusted afterward from that league's own
-  Commissioner tab. Anyone can create a league; there's no gatekeeping.
+  **Start a new league** form. Anyone can create a league; there's no
+  gatekeeping.
+- **Creating a league creates your account in it.** The "Start a new
+  league" form asks for a league name plus the same signup fields as
+  joining an existing league (username, team name, name, email,
+  password) — submitting it creates that new league, signs you up as a
+  player in it, and makes you its commissioner immediately, with no PIN
+  step needed. Everything else about the new league defaults the same way
+  this app always has (1000-point starting balance, PIN `1234`, empty
+  roster/board) and gets adjusted afterward from that league's own
+  Commissioner tab.
 - **All Leagues.** From inside any league, a small link next to its name
   switches back to the picker.
 - **Accounts are per-league**, not global — the same username can be used

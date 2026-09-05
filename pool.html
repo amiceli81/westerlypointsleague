@@ -2244,8 +2244,25 @@
       '<div style="text-align:center"><h1 class="pool-title">Pick \'Em Leagues</h1><p class="hint">Pick a league to enter, or start your own.</p></div>' +
       '<div class="card"><div class="section-title"><h3>Your leagues</h3></div>' + list + '</div>' +
       '<div class="card"><div class="section-title"><h3>Start a new league</h3></div>' +
-      '<form class="panel" data-action="create-league"><div class="field"><label>League name</label><input name="name" required placeholder="e.g. Smith Family Pool"></div>' +
-      '<div class="pick-actions"><button class="btn" type="submit">Create league</button></div></form></div>' +
+      '<p class="hint">Creating a league also creates your player account in it, and makes you its commissioner.</p>' +
+      '<form class="panel" data-action="create-league">' +
+        '<div class="field"><label>League name</label><input name="name" required placeholder="e.g. Smith Family Pool"></div>' +
+        '<div class="grid2">' +
+          '<div class="field"><label>Username</label><input name="username" maxlength="24" autocomplete="username" required></div>' +
+          '<div class="field"><label>Team name</label><input name="teamName" maxlength="30" required></div>' +
+        '</div>' +
+        '<div class="grid2">' +
+          '<div class="field"><label>First name</label><input name="firstName" maxlength="30" required></div>' +
+          '<div class="field"><label>Last name</label><input name="lastName" maxlength="30" required></div>' +
+        '</div>' +
+        '<div class="field"><label>Email</label><input type="email" name="email" required></div>' +
+        '<div class="grid2">' +
+          '<div class="field"><label>Password</label><input type="password" name="password" minlength="6" autocomplete="new-password" required></div>' +
+          '<div class="field"><label>Confirm password</label><input type="password" name="confirmPassword" minlength="6" autocomplete="new-password" required></div>' +
+        '</div>' +
+        '<p class="hint">This keeps picks straight within the group — it isn\'t real account security. Please don\'t reuse a password you use anywhere else.</p>' +
+        '<div class="pick-actions"><button class="btn" type="submit">Create league</button></div>' +
+      '</form></div>' +
       '</div></div>';
   }
 
@@ -3128,11 +3145,33 @@
       }
     } else if(action === 'create-league'){
       var newLeagueName = String(fd.get('name')||'').trim();
+      var clUsername = normalizeUsername(fd.get('username'));
+      var clTeamName = String(fd.get('teamName')||'').trim();
+      var clFirstName = String(fd.get('firstName')||'').trim();
+      var clLastName = String(fd.get('lastName')||'').trim();
+      var clEmail = String(fd.get('email')||'').trim();
+      var clPassword = String(fd.get('password')||'');
+      var clConfirm = String(fd.get('confirmPassword')||'');
       if(!newLeagueName){ toast('Please enter a league name.'); return; }
-      var newLeague = { id: uid(), name: newLeagueName, createdAt: new Date().toISOString(), data: normalizeLeagueData({poolName: newLeagueName}) };
-      rootState.leagues.push(newLeague);
-      enterLeague(newLeague.id);
-      save('League created! You\'re in.');
+      if(!clUsername || !clTeamName || !clFirstName || !clLastName || !clEmail || !clPassword){ toast('Please fill in every field.'); return; }
+      if(!/^[a-z0-9_.-]{3,24}$/.test(clUsername)){ toast('Usernames: 3-24 characters, letters/numbers/._- only.'); return; }
+      if(clPassword.length < 6){ toast('Password needs at least 6 characters.'); return; }
+      if(clPassword !== clConfirm){ toast('Passwords don\'t match.'); return; }
+      if(!/^\S+@\S+\.\S+$/.test(clEmail)){ toast('That doesn\'t look like a valid email address.'); return; }
+      hashNewPassword(clPassword).then(function(hashed){
+        var newLeague = { id: uid(), name: newLeagueName, createdAt: new Date().toISOString(), data: normalizeLeagueData({poolName: newLeagueName}) };
+        rootState.leagues.push(newLeague);
+        enterLeague(newLeague.id);
+        state.players.push({
+          username: clUsername, salt: hashed.salt, passwordHash: hashed.hash,
+          teamName: clTeamName, firstName: clFirstName, lastName: clLastName, email: clEmail,
+          createdAt: new Date().toISOString()
+        });
+        currentPlayer = clUsername;
+        view.isCommissioner = true;
+        setCurrentLeagueAccount({ username: clUsername, isCommissioner: true });
+        save('League created! You\'re signed in as its commissioner.');
+      });
     } else if(action === 'save-payment'){
       if(!view.isCommissioner) return;
       var payUsername = form.getAttribute('data-player');

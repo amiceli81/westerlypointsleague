@@ -94,8 +94,15 @@ const { chromium } = require('playwright');
   if (leagueRowsBefore !== 1) throw new Error('FAIL: expected exactly 1 league listed in the picker, got ' + leagueRowsBefore);
   console.log('PASS: "All Leagues" shows the picker with exactly the 1 existing league');
 
-  // --- 4. Create a second league ---
+  // --- 4. Create a second league, with the creator's own credentials ---
   await page.fill('form[data-action="create-league"] input[name="name"]', 'League Two');
+  await page.fill('form[data-action="create-league"] input[name="username"]', 'l2commish');
+  await page.fill('form[data-action="create-league"] input[name="teamName"]', 'Commish Team L2');
+  await page.fill('form[data-action="create-league"] input[name="firstName"]', 'Com');
+  await page.fill('form[data-action="create-league"] input[name="lastName"]', 'Missioner');
+  await page.fill('form[data-action="create-league"] input[name="email"]', 'l2commish@test.com');
+  await page.fill('form[data-action="create-league"] input[name="password"]', 'password1');
+  await page.fill('form[data-action="create-league"] input[name="confirmPassword"]', 'password1');
   await page.click('form[data-action="create-league"] button[type="submit"]');
   await page.waitForTimeout(200);
 
@@ -107,12 +114,27 @@ const { chromium } = require('playwright');
   if (bleedThroughGames !== 0) throw new Error('FAIL: new league should have zero games, found ' + bleedThroughGames);
   console.log('PASS: creating a league switches into a clean, empty board with no bleed-through from league 1');
 
+  const creatorChip = await page.locator('.who-chip .name').innerText();
+  if (!creatorChip.includes('Commish Team L2')) throw new Error('FAIL: league creator should be auto-signed-in, got: ' + creatorChip);
+  await page.click('button[data-action="set-tab"][data-tab="admin"]');
+  await page.waitForTimeout(150);
+  const pinGateVisible = await page.locator('.pin-gate').count();
+  if (pinGateVisible !== 0) throw new Error('FAIL: league creator should already be commissioner (no PIN gate), found ' + pinGateVisible + ' pin-gate(s)');
+  console.log('PASS: creating a league signs the creator in as its own player and commissioner, unlocked, in the new league');
+
   published = await page.evaluate(() => window.__lastPublish);
   let rootAfterCreate = parsePublished(published);
   if (rootAfterCreate.leagues.length !== 2) throw new Error('FAIL: expected exactly 2 leagues after creation, got ' + rootAfterCreate.leagues.length);
-  console.log('PASS: published document now has exactly 2 leagues');
+  const league2Data = rootAfterCreate.leagues.find(l => l.name === 'League Two').data;
+  if (!league2Data.players.some(p => p.username === 'l2commish')) throw new Error('FAIL: league creator not saved as a player in the new league');
+  console.log('PASS: published document now has exactly 2 leagues, with the creator as League Two\'s player');
 
   // --- 5. Per-league login isolation: sign up "bob" in League Two ---
+  // (log the creator out first -- the signup form only shows when logged out)
+  await page.click('button[data-action="set-tab"][data-tab="week"]');
+  await page.waitForTimeout(150);
+  await page.click('button[data-action="log-out"]');
+  await page.waitForTimeout(150);
   await page.fill('form[data-action="signup"] input[name="username"]', 'bob');
   await page.fill('form[data-action="signup"] input[name="teamName"]', 'Bobs Team L2');
   await page.fill('form[data-action="signup"] input[name="firstName"]', 'Bob');
